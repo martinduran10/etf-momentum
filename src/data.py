@@ -31,7 +31,10 @@ def load_panel(path: Path | str | None = None) -> pd.DataFrame:
     """
     path = Path(path) if path else DATA_DIR / "etf_panel.parquet"
     df = pd.read_parquet(path)
-    df["date"] = pd.to_datetime(df["date"])
+    # Parquet preserves the file's timestamp resolution (microseconds via
+    # pyarrow), while pd.read_csv(parse_dates=...) elsewhere in the codebase
+    # produces nanoseconds. Normalize so all downstream date indexes match.
+    df["date"] = pd.to_datetime(df["date"]).astype("datetime64[ns]")
     return df.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 
