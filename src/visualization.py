@@ -177,3 +177,77 @@ def plot_rolling_sharpe(
     ax.legend(loc="upper left")
     fig.tight_layout()
     return fig
+
+
+def plot_regime_overlay(
+    price: pd.Series,
+    daily_regimes: pd.Series,
+    regime_labels: dict[int, str],
+    regime_colors: dict[int, str],
+    title: str = "SPY with HMM regime overlay",
+) -> plt.Figure:
+    """Plot a price series with shaded vertical bands marking regime spans."""
+    _apply_style()
+    fig, ax = plt.subplots()
+    ax.plot(price.index, price.values, color="black", linewidth=1.2, zorder=3)
+
+    aligned = daily_regimes.reindex(price.index)
+    # Walk the regime series to find contiguous spans (NaN breaks a span).
+    cur_regime = None
+    span_start = None
+    prev_date = None
+    for date, r in aligned.items():
+        r_val = None if pd.isna(r) else int(r)
+        if r_val != cur_regime:
+            if cur_regime is not None and span_start is not None:
+                ax.axvspan(span_start, prev_date,
+                           color=regime_colors[cur_regime], alpha=0.25, zorder=1)
+            cur_regime = r_val
+            span_start = date
+        prev_date = date
+    if cur_regime is not None and span_start is not None:
+        ax.axvspan(span_start, prev_date,
+                   color=regime_colors[cur_regime], alpha=0.25, zorder=1)
+
+    # Build a legend with proxy patches (one entry per regime).
+    from matplotlib.patches import Patch
+    handles = [
+        Patch(facecolor=regime_colors[r], alpha=0.4, label=regime_labels[r])
+        for r in sorted(regime_labels)
+    ]
+    ax.legend(handles=handles, loc="upper left")
+    ax.set_title(title)
+    ax.set_ylabel(price.name or "price")
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    fig.tight_layout()
+    return fig
+
+
+def plot_transition_matrix(
+    transmat: np.ndarray,
+    labels: list[str],
+    title: str = "Regime transition matrix",
+    cmap: str = "Blues",
+) -> plt.Figure:
+    """Heatmap of a row-stochastic regime transition matrix."""
+    _apply_style()
+    fig, ax = plt.subplots(figsize=(5.5, 5))
+    im = ax.imshow(transmat, cmap=cmap, vmin=0.0, vmax=1.0, aspect="equal")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.set_yticks(range(len(labels)))
+    ax.set_yticklabels(labels)
+    ax.set_xlabel("to state")
+    ax.set_ylabel("from state")
+    ax.set_title(title)
+    for i in range(transmat.shape[0]):
+        for j in range(transmat.shape[1]):
+            v = transmat[i, j]
+            text_color = "white" if v > 0.5 else "black"
+            ax.text(j, i, f"{v:.2f}", ha="center", va="center",
+                    color=text_color, fontsize=10)
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    ax.grid(False)
+    fig.tight_layout()
+    return fig
