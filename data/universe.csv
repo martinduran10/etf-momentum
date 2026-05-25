@@ -1,0 +1,44 @@
+sheet_name,ticker,category,n_obs,start_date,end_date
+asia exjapan,aaxj,asia_ex_japan,2990,2014-07-03,2026-05-22
+small cap europe,dfe,europe_dev,2990,2014-07-03,2026-05-22
+emerging,eem,emerging_mkts,2990,2014-07-03,2026-05-22
+developed,efa,developed_mkts,2990,2014-07-03,2026-05-22
+MSCI growth,efg,intl_style,2990,2014-07-03,2026-05-22
+MSCI value,efv,intl_style,2990,2014-07-03,2026-05-22
+indonesia,eido,country,2990,2014-07-03,2026-05-22
+INDIA,epi,country,2990,2014-07-03,2026-05-22
+developed asia exjapan,epp,asia_ex_japan,2990,2014-07-03,2026-05-22
+germany,ewg,country,2990,2014-07-03,2026-05-22
+JAPAN,ewj,country,2990,2014-07-03,2026-05-22
+SPAIN,ewp,country,2990,2014-07-03,2026-05-22
+UK,ewu,country,2990,2014-07-03,2026-05-22
+mexico,eww,country,2990,2014-07-03,2026-05-22
+EM small cap,ewx,em_style,2990,2014-07-03,2026-05-22
+brasil,ewz,country,2990,2014-07-03,2026-05-22
+europe,ezu,europe_dev,2990,2014-07-03,2026-05-22
+china,fxi,country,2990,2014-07-03,2026-05-22
+MSCI,iefa,developed_mkts,2990,2014-07-03,2026-05-22
+LATAM,ilf,region,2990,2014-07-03,2026-05-22
+russell 1000 value,iwd,us_style,2990,2014-07-03,2026-05-22
+russell 1000 growth,iwf,us_style,2990,2014-07-03,2026-05-22
+small cap US,iwm,us_style,2990,2014-07-03,2026-05-22
+russell 2000 value,iwn,us_style,2990,2014-07-03,2026-05-22
+russell 2000 growth,iwo,us_style,2990,2014-07-03,2026-05-22
+midcap growth,iwp,us_style,2990,2014-07-03,2026-05-22
+midcap value,iws,us_style,2990,2014-07-03,2026-05-22
+us reit,iyr,us_sector,2990,2014-07-03,2026-05-22
+us corporate,jnk,fixed_income,2990,2014-07-03,2026-05-22
+MSCI small cap,schc,intl_style,2990,2014-07-03,2026-05-22
+S&P,spy,us_large,2990,2014-07-03,2026-05-22
+us bond,tlt,fixed_income,2990,2014-07-03,2026-05-22
+smallusgrowth,vbk,us_style,2990,2014-07-03,2026-05-22
+WORLD,vt,other,2990,2014-07-03,2026-05-22
+materials,xlb,us_sector,2990,2014-07-03,2026-05-22
+energy,xle,us_sector,2990,2014-07-03,2026-05-22
+financials,xlf,us_sector,2990,2014-07-03,2026-05-22
+industrials,xli,us_sector,2990,2014-07-03,2026-05-22
+techno,xlk,us_sector,2990,2014-07-03,2026-05-22
+consumer staples,xlp,us_sector,2990,2014-07-03,2026-05-22
+utilities,xlu,us_sector,2990,2014-07-03,2026-05-22
+health,xlv,us_sector,2990,2014-07-03,2026-05-22
+consumer disc,xly,us_sector,2990,2014-07-03,2026-05-22
