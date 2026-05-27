@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python3 -m pytest tests/ -v --tb=short)",
-      "Bash(python3 -m pip install -q \"hmmlearn>=0.3.0\")",
-      "Bash(python3 -c \"from hmmlearn.hmm import GaussianHMM; print\\('hmmlearn OK', GaussianHMM\\)\")"
-    ]
-  }
-}

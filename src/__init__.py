@@ -1,1 +1,0 @@
-"""ETF momentum strategy library."""
