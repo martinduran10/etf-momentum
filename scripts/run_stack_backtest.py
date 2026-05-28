@@ -23,6 +23,11 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.benchmarks import (  # noqa: E402
+    benchmark_summary,
+    compounded_equity_curve,
+    spy_buy_and_hold_returns,
+)
 from src.data import load_closes  # noqa: E402
 from src.metrics import (  # noqa: E402
     drawdown_series,
@@ -66,6 +71,37 @@ def _save_drawdown(returns: pd.Series, path: Path) -> None:
     plt.close(fig)
 
 
+def _save_stack_vs_spy(
+    stack_returns: pd.Series, spy_returns: pd.Series, path: Path
+) -> None:
+    stack_curve = equity_curve(stack_returns) * 100.0  # arithmetic (no compounding)
+    spy_curve = compounded_equity_curve(spy_returns) * 100.0  # buy-and-hold
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ax.plot(
+        stack_curve.index,
+        stack_curve.values,
+        color="#1f4e79",
+        lw=1.4,
+        label="Stack Portfolio (arithmetic)",
+    )
+    ax.plot(
+        spy_curve.index,
+        spy_curve.values,
+        color="#c0700f",
+        lw=1.4,
+        label="SPY buy-and-hold (compounded)",
+    )
+    ax.set_title("Stack Portfolio vs SPY")
+    ax.set_ylabel("Cumulative return (%)")
+    ax.set_xlabel("Date")
+    ax.axhline(0, color="grey", lw=0.7)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", frameon=False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
 def main() -> None:
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -91,9 +127,19 @@ def main() -> None:
         TABLES_DIR / "sub_strategy_metrics.csv", index=False
     )
 
+    # SPY buy-and-hold benchmark comparison.
+    spy_returns = spy_buy_and_hold_returns(closes)
+    spy_metrics = benchmark_summary(spy_returns)
+    comparison = pd.DataFrame(
+        {"Stack Portfolio": metrics, "SPY": spy_metrics}
+    )
+    comparison.index.name = "metric"
+    comparison.to_csv(TABLES_DIR / "spy_comparison.csv")
+
     # Figures.
     _save_equity_curve(headline, FIGURES_DIR / "equity_curve.png")
     _save_drawdown(headline, FIGURES_DIR / "drawdown.png")
+    _save_stack_vs_spy(headline, spy_returns, FIGURES_DIR / "stack_vs_spy.png")
 
     # Console summary (script entry point only; library code stays silent).
     span = f"{headline.index[0].date()} -> {headline.index[-1].date()}"
@@ -104,6 +150,12 @@ def main() -> None:
         f"  Annualized vol     : {metrics['annualized_volatility']:.2%}",
         f"  Sharpe ratio       : {metrics['sharpe_ratio']:.2f}",
         f"  Max drawdown       : {metrics['max_drawdown']:.2%}",
+        "SPY buy-and-hold (compounded) over the same window:",
+        f"  Total return       : {spy_metrics['total_return']:.2%}",
+        f"  Annualized return  : {spy_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {spy_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {spy_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {spy_metrics['max_drawdown']:.2%}",
     ]
     print("\n".join(lines))
 

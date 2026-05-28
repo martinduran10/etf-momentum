@@ -114,6 +114,36 @@ Measured from each sub-strategy's own start date onward:
 
 ![Drawdown](reports/figures/drawdown.png)
 
+## vs SPY Benchmark
+
+As a reference point, the Stack Portfolio is compared against a simple SPY
+buy-and-hold position entered at the 2015-12-07 close and held through the end
+of the data.
+
+> **Methodology note — the two lines use different return conventions.** The
+> Stack Portfolio line is **arithmetic** (a running *sum* of daily returns):
+> per the spec the strategy never compounds — capital resets to $100 each
+> rebalance and slot sizes are fixed. The SPY line is **compounded** (geometric
+> growth of $1), because a buy-and-hold position naturally reinvests its
+> profits. Consequently the SPY total/annualized figures benefit from
+> compounding and are not directly comparable to the Stack's arithmetic
+> figures; the comparison is indicative, not like-for-like.
+
+![Stack Portfolio vs SPY](reports/figures/stack_vs_spy.png)
+
+| Metric | Stack Portfolio (arithmetic) | SPY (compounded) |
+|--------|------------------------------|------------------|
+| Total return | 110.99% | 257.88% |
+| Annualized return | 10.63% | 12.99% |
+| Annualized volatility | 16.21% | 17.92% |
+| Sharpe ratio | 0.66 | 0.73 |
+| Max drawdown | −28.54% | −34.10% |
+
+The Stack Portfolio trails SPY on total/annualized return over this
+equity-bull-market window, but does so at lower volatility and with a shallower
+maximum drawdown (−28.5% vs −34.1%) — consistent with its risk-managed,
+in-and-out design.
+
 ## Reproducing
 
 ```bash
@@ -122,5 +152,6 @@ pytest tests/ -v                      # all tests incl. the CI validation gate
 python scripts/run_stack_backtest.py  # regenerate figures + tables
 ```
 
-Outputs land in `reports/figures/` (`equity_curve.png`, `drawdown.png`) and
-`reports/tables/` (`metrics_summary.csv`, `sub_strategy_metrics.csv`).
+Outputs land in `reports/figures/` (`equity_curve.png`, `drawdown.png`,
+`stack_vs_spy.png`) and `reports/tables/` (`metrics_summary.csv`,
+`sub_strategy_metrics.csv`, `spy_comparison.csv`).
