@@ -144,6 +144,48 @@ equity-bull-market window, but does so at lower volatility and with a shallower
 maximum drawdown (−28.5% vs −34.1%) — consistent with its risk-managed,
 in-and-out design.
 
+## Phase 2: Overbought Market Filter
+
+Phase 2 layers a **purely additive overlay** on top of the Phase 1 backtest.
+An exogenous binary signal (`data/overbought_signal.csv`) flags days where the
+broad market is considered overbought (`market_ok == 0`). Whenever a day `T`
+is flagged, the strategy sits in **cash on the four trading days `T+3`,
+`T+4`, `T+5`, `T+6`** — offsets counted in the strategy's trading-day
+calendar, so weekends and holidays are skipped naturally. Overlapping windows
+merge: a run of consecutive 0-signal days produces a continuous cash block
+from the first 0's `T+3` to the last 0's `T+6`.
+
+The overlay is applied to Phase 1's combined daily return series; the engine,
+its sub-strategies, and all Phase 1 outputs are untouched. The 3-day minimum
+lag guarantees no look-ahead — the cash decision for day `t` depends only on
+signal values at `t-3` and earlier. Lookback offsets that predate the filter
+data, and strategy trading days that have no matching date in the filter
+CSV, are both treated as `market_ok == 1` (OK to trade).
+
+> The methodology behind how the binary signal is derived will be documented
+> in a future update; for Phase 2 it is consumed as a precomputed input.
+
+### Comparison
+
+![Overbought filter vs unfiltered](reports/figures/stack_filtered_vs_unfiltered.png)
+
+| Metric | Unfiltered (Phase 1) | Filtered (Phase 2) |
+|--------|----------------------|--------------------|
+| Total return | 110.99% | 136.18% |
+| Annualized return | 10.63% | 13.05% |
+| Annualized volatility | 16.21% | 13.40% |
+| Sharpe ratio | 0.66 | 0.97 |
+| Max drawdown | −28.54% | −23.90% |
+| % of days in cash | — | 36.96% |
+
+Over the headline window the overlay sits in cash on roughly 37% of trading
+days, and on the remaining days simply passes Phase 1's return through. The
+result is a higher total and annualized return with materially lower
+volatility (16.21% → 13.40%) and a shallower maximum drawdown (−28.5% →
+−23.9%), lifting the Sharpe ratio from 0.66 to 0.97. The filter's gains come
+from sidestepping clusters of bad days rather than from amplifying good ones
+— consistent with an overbought-avoidance rule.
+
 ## Reproducing
 
 ```bash
@@ -153,5 +195,6 @@ python scripts/run_stack_backtest.py  # regenerate figures + tables
 ```
 
 Outputs land in `reports/figures/` (`equity_curve.png`, `drawdown.png`,
-`stack_vs_spy.png`) and `reports/tables/` (`metrics_summary.csv`,
-`sub_strategy_metrics.csv`, `spy_comparison.csv`).
+`stack_vs_spy.png`, `stack_filtered_vs_unfiltered.png`) and `reports/tables/`
+(`metrics_summary.csv`, `sub_strategy_metrics.csv`, `spy_comparison.csv`,
+`phase2_comparison.csv`).

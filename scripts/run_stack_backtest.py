@@ -34,6 +34,11 @@ from src.metrics import (  # noqa: E402
     equity_curve,
     summary,
 )
+from src.overbought_filter import (  # noqa: E402
+    apply_filter,
+    build_cash_mask,
+    load_overbought_signal,
+)
 from src.stack_backtest import (  # noqa: E402
     HEADLINE_START,
     run_stack_portfolio,
@@ -66,6 +71,37 @@ def _save_drawdown(returns: pd.Series, path: Path) -> None:
     ax.set_ylabel("Drawdown (%)")
     ax.set_xlabel("Date")
     ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
+def _save_filtered_vs_unfiltered(
+    unfiltered: pd.Series, filtered: pd.Series, path: Path
+) -> None:
+    unfiltered_curve = equity_curve(unfiltered) * 100.0
+    filtered_curve = equity_curve(filtered) * 100.0
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ax.plot(
+        unfiltered_curve.index,
+        unfiltered_curve.values,
+        color="#1f4e79",
+        lw=1.4,
+        label="Phase 1 (unfiltered)",
+    )
+    ax.plot(
+        filtered_curve.index,
+        filtered_curve.values,
+        color="#2a8f3a",
+        lw=1.4,
+        label="Phase 2 (overbought filter)",
+    )
+    ax.set_title("Stack Portfolio — Overbought Filter vs Unfiltered")
+    ax.set_ylabel("Cumulative return (%)")
+    ax.set_xlabel("Date")
+    ax.axhline(0, color="grey", lw=0.7)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", frameon=False)
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
@@ -136,10 +172,32 @@ def main() -> None:
     comparison.index.name = "metric"
     comparison.to_csv(TABLES_DIR / "spy_comparison.csv")
 
+    # Phase 2: overbought-market cash filter overlay.
+    signal = load_overbought_signal()
+    cash_mask = build_cash_mask(signal, closes.index)
+    filtered_headline = apply_filter(headline, cash_mask)
+    filtered_metrics = summary(filtered_headline)
+    cash_share = float(
+        cash_mask.reindex(headline.index, fill_value=False).mean()
+    )
+
+    phase2_comparison = pd.DataFrame(
+        {
+            "Unfiltered (Phase 1)": metrics,
+            "Filtered (Phase 2)": filtered_metrics,
+        }
+    )
+    phase2_comparison.loc["pct_days_in_cash"] = [float("nan"), cash_share]
+    phase2_comparison.index.name = "metric"
+    phase2_comparison.to_csv(TABLES_DIR / "phase2_comparison.csv")
+
     # Figures.
     _save_equity_curve(headline, FIGURES_DIR / "equity_curve.png")
     _save_drawdown(headline, FIGURES_DIR / "drawdown.png")
     _save_stack_vs_spy(headline, spy_returns, FIGURES_DIR / "stack_vs_spy.png")
+    _save_filtered_vs_unfiltered(
+        headline, filtered_headline, FIGURES_DIR / "stack_filtered_vs_unfiltered.png"
+    )
 
     # Console summary (script entry point only; library code stays silent).
     span = f"{headline.index[0].date()} -> {headline.index[-1].date()}"
@@ -156,6 +214,13 @@ def main() -> None:
         f"  Annualized vol     : {spy_metrics['annualized_volatility']:.2%}",
         f"  Sharpe ratio       : {spy_metrics['sharpe_ratio']:.2f}",
         f"  Max drawdown       : {spy_metrics['max_drawdown']:.2%}",
+        "Phase 2 (overbought filter, T+3..T+6 cash) over the same window:",
+        f"  Total return       : {filtered_metrics['total_return']:.2%}",
+        f"  Annualized return  : {filtered_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {filtered_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {filtered_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {filtered_metrics['max_drawdown']:.2%}",
+        f"  Days in cash       : {cash_share:.2%}",
     ]
     print("\n".join(lines))
 
