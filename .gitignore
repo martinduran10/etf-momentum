@@ -41,12 +41,6 @@ htmlcov/
 # Local scratch / experiments (anything under scratch/ is local-only)
 scratch/
 
-# Generated reports and large outputs (keep the folder via .gitkeep)
-reports/*.pdf
-reports/*.png
-reports/*.html
-!reports/.gitkeep
-
 # Sensitive config (e.g., Bloomberg API credentials, if you add them later)
 .env
 config/secrets.yaml

@@ -9,7 +9,6 @@ compared side by side.
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from .data import TRADING_DAYS

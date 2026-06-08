@@ -28,3 +28,6 @@ jobs:
 
       - name: Run test suite (includes the validation CI gate)
         run: pytest tests/ -v
+
+      - name: Smoke-test end-to-end script
+        run: python scripts/run_stack_backtest.py
