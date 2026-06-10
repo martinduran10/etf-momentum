@@ -1,4 +1,4 @@
-# Project briefing — ETF Momentum (Phases 1–2: Stack Portfolio + Overbought Filter)
+# Project briefing — ETF Momentum (Phases 1–2b: Stack Portfolio + Overbought Filters)
 
 ## Goal
 
@@ -8,7 +8,9 @@ overlays. **Phase 1 (Stack Portfolio) is reproduction only** — no regime
 detection, walk-forward, factor regression, transaction costs, or other
 improvements baked into it; match the Excel mechanics literally and keep it
 frozen. The **overbought market filter is Phase 2** (built — see below),
-applied as an overlay that never modifies Phase 1. The divergence filter
+applied as an overlay that never modifies Phase 1. The **individual-ETF
+overbought filter is Phase 2b** (built — see below), a daily-rebalanced overlay
+that reuses Phase 1/2 functions and modifies neither. The divergence filter
 (Phase III) and risk-on/risk-off variable (Phase IV) remain future work.
 Faithful reproduction always takes priority over "improvements."
 
@@ -115,6 +117,60 @@ the deck's published Phase II (134.94% / Sharpe 1.01):
 | Max drawdown | −28.54% | −23.90% |
 | % of days in cash | — | 36.96% |
 
+## Phase 2b — Individual-ETF overbought filter (additive overlay)
+
+Phase 2b is a second additive overlay. It reuses Phase 1/2 functions by
+importing them (`signals`, `data`, `metrics`, `stack_backtest`,
+`overbought_filter`) and modifies no existing module, test, or Phase 1/2
+artifact. Unlike Phase 1's 20-day rebalance, **Phase 2b rebalances daily**.
+
+**Per sub-strategy (A/B/C/D, same starts/lookbacks), per trading day `t`:**
+
+- Rank all 43 ETFs by `slow_signal` (that sub's lookback). The ranking is
+  recomputed **daily** — intentional.
+- **Eligible** = `slow_signal > 0`, **and** (only when `analyze == 1` that day)
+  **not** individually overbought.
+- **Individual overbought** (per ETF, that day): `close >= 1.05 * SMA20` **or**
+  `close >= 1.07 * SMA50`, where SMA20/SMA50 are **simple** moving averages of
+  that ETF's own close over 20 and 50 trading days. Either leg true ⇒ excluded.
+  An ETF without a full window is not flagged (NaN comparisons are `False`; no
+  fillna, no special-case).
+- **No timer**: a name is excluded only on days it is overbought; eligible again
+  the moment it is not (swap-back is automatic from the daily recompute).
+- Hold the **top 5 eligible** names by descending `slow_signal`; walk down the
+  ranking to fill 5 slots from eligible names only, remaining slots cash. Never
+  reach into `slow_signal <= 0` names.
+- $20/slot, $100, **no compounding**; sub daily return = sum of 5 slot returns
+  / 5 (cash slots = 0).
+- **No look-ahead**: the roster held on day `t` is chosen from `slow_signal`,
+  SMA-overbought, and `analyze` as of `t-1` (decided at the prior close, accrues
+  on `t`) — mirroring `roster_lag=1`.
+
+**Signal.** The analyze gate is exogenous/precomputed in
+`data/overbought_individual.csv` (columns `date, market_overbought, cancel,
+overbought_net, analyze`); only `date` and `analyze` are used (`1` ⇒ screen
+active). Consumed as-is, never recomputed. Six rows (2025-09-05 … 2025-09-12)
+are imputed. Derivation in `docs/individual_overbought_methodology.md`.
+
+**Combine & mask.** Subs combine exactly as Phase 1 (simple mean of active subs,
+phased in by start date). The **Phase 2 market cash mask is applied last and
+unchanged** (reuse `overbought_filter`): a Phase 2 cash day is cash regardless of
+the 2b roster.
+
+**Diagnostic.** A "daily-rebalanced, screen OFF" series (same daily top-5 on
+positive signal, no individual screen, no market mask) isolates the
+daily-rebalance change from the filter's effect.
+
+**No validation target** (empirical mode; tests pin mechanics, not numbers):
+
+| Metric | Phase 1 | Phase 1+2 | Phase 2b | Daily-rebal (screen off) |
+|--------|---------|-----------|----------|--------------------------|
+| Total return | 110.99% | 136.18% | 124.30% | 108.61% |
+| Annualized return | 10.63% | 13.05% | 11.91% | 10.41% |
+| Annualized volatility | 16.21% | 13.40% | 13.80% | 16.08% |
+| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.65 |
+| Max drawdown | −28.54% | −23.90% | −24.04% | −27.88% |
+
 ## Layout
 
 - `src/data.py` — load closes, log/simple returns, `vol_10`.
@@ -125,13 +181,19 @@ the deck's published Phase II (134.94% / Sharpe 1.01):
 - `src/benchmarks.py` — SPY buy-and-hold comparison.
 - `src/overbought_filter.py` — Phase 2 overlay (load signal, build cash mask,
   apply filter).
+- `src/individual_overbought.py` — Phase 2b overlay (analyze gate, SMA
+  overbought flags, daily eligibility/selection/substitution, per-sub +
+  combined returns). **Imports from Phase 1/2; modifies neither.**
 - `data/overbought_signal.csv` — Phase 2 input (`date, market_ok`).
+- `data/overbought_individual.csv` — Phase 2b input (uses `date, analyze`).
 - `docs/overbought_methodology.md` — how `market_ok` was derived.
-- `tests/` — data, signals, mechanics, overbought-filter tests, a
-  frozen-snapshot test pinning Phase 1 byte-for-byte, and `test_validation.py`
-  (the Phase 1 CI gate).
+- `docs/individual_overbought_methodology.md` — the analyze gate + individual
+  overbought test (incl. the 6 imputed dates).
+- `tests/` — data, signals, mechanics, overbought-filter and
+  individual-overbought tests, a frozen-snapshot test pinning Phase 1
+  byte-for-byte, and `test_validation.py` (the Phase 1 CI gate).
 - `scripts/run_stack_backtest.py` — end-to-end run → figures + tables (incl. the
-  Phase 2 filtered-vs-unfiltered outputs).
+  Phase 2 filtered-vs-unfiltered and Phase 2b comparison outputs).
 
 ## Conventions
 

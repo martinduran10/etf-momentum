@@ -29,6 +29,7 @@ from src.benchmarks import (  # noqa: E402
     spy_buy_and_hold_returns,
 )
 from src.data import load_closes  # noqa: E402
+from src.individual_overbought import run_individual_overbought  # noqa: E402
 from src.metrics import (  # noqa: E402
     drawdown_series,
     equity_curve,
@@ -97,6 +98,31 @@ def _save_filtered_vs_unfiltered(
         label="Phase 2 (overbought filter)",
     )
     ax.set_title("Stack Portfolio — Overbought Filter vs Unfiltered")
+    ax.set_ylabel("Cumulative return (%)")
+    ax.set_xlabel("Date")
+    ax.axhline(0, color="grey", lw=0.7)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", frameon=False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
+def _save_phase2b_comparison(
+    phase1: pd.Series,
+    phase12: pd.Series,
+    phase2b: pd.Series,
+    path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(11, 5))
+    for returns, color, label in (
+        (phase1, "#1f4e79", "Phase 1"),
+        (phase12, "#2a8f3a", "Phase 1+2 (market filter)"),
+        (phase2b, "#9b2f8f", "Phase 2b (individual screen)"),
+    ):
+        curve = equity_curve(returns) * 100.0
+        ax.plot(curve.index, curve.values, color=color, lw=1.4, label=label)
+    ax.set_title("Stack Portfolio — Phase 2b vs Phase 1 / Phase 1+2")
     ax.set_ylabel("Cumulative return (%)")
     ax.set_xlabel("Date")
     ax.axhline(0, color="grey", lw=0.7)
@@ -191,12 +217,42 @@ def main() -> None:
     phase2_comparison.index.name = "metric"
     phase2_comparison.to_csv(TABLES_DIR / "phase2_comparison.csv")
 
+    # Phase 2b: individual-ETF overbought filter (daily-rebalanced overlay).
+    # Main series: daily rank + individual screen, then the Phase 2 market mask.
+    phase2b = run_individual_overbought(closes, screen=True)
+    phase2b_headline = phase2b["headline_returns"]
+    phase2b_filtered = apply_filter(phase2b_headline, cash_mask)
+    phase2b_metrics = summary(phase2b_filtered)
+
+    # Diagnostic: daily-rebalanced, individual screen OFF, no market mask —
+    # isolates the daily-rebalance change from the filter's effect.
+    diag = run_individual_overbought(closes, screen=False)
+    diag_headline = diag["headline_returns"]
+    diag_metrics = summary(diag_headline)
+
+    phase2b_comparison = pd.DataFrame(
+        {
+            "Phase 1": metrics,
+            "Phase 1+2": filtered_metrics,
+            "Phase 2b": phase2b_metrics,
+            "Daily-rebal (screen off)": diag_metrics,
+        }
+    )
+    phase2b_comparison.index.name = "metric"
+    phase2b_comparison.to_csv(TABLES_DIR / "phase2b_comparison.csv")
+
     # Figures.
     _save_equity_curve(headline, FIGURES_DIR / "equity_curve.png")
     _save_drawdown(headline, FIGURES_DIR / "drawdown.png")
     _save_stack_vs_spy(headline, spy_returns, FIGURES_DIR / "stack_vs_spy.png")
     _save_filtered_vs_unfiltered(
         headline, filtered_headline, FIGURES_DIR / "stack_filtered_vs_unfiltered.png"
+    )
+    _save_phase2b_comparison(
+        headline,
+        filtered_headline,
+        phase2b_filtered,
+        FIGURES_DIR / "phase2b_comparison.png",
     )
 
     # Console summary (script entry point only; library code stays silent).
@@ -221,6 +277,18 @@ def main() -> None:
         f"  Sharpe ratio       : {filtered_metrics['sharpe_ratio']:.2f}",
         f"  Max drawdown       : {filtered_metrics['max_drawdown']:.2%}",
         f"  Days in cash       : {cash_share:.2%}",
+        "Phase 2b (individual screen + market mask) over the same window:",
+        f"  Total return       : {phase2b_metrics['total_return']:.2%}",
+        f"  Annualized return  : {phase2b_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {phase2b_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {phase2b_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {phase2b_metrics['max_drawdown']:.2%}",
+        "Diagnostic — daily-rebalanced, screen off, no market mask:",
+        f"  Total return       : {diag_metrics['total_return']:.2%}",
+        f"  Annualized return  : {diag_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {diag_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {diag_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {diag_metrics['max_drawdown']:.2%}",
     ]
     print("\n".join(lines))
 

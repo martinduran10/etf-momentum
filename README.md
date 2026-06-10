@@ -52,6 +52,31 @@ volatility and drawdown — by sidestepping clusters of bad days rather than
 amplifying good ones. It closely tracks the deck's published Phase II
 (134.94% / Sharpe 1.01).
 
+## Phase 2b — Individual-ETF overbought filter
+
+**Phase 2b** adds a second additive overlay that **rebalances daily**: each
+sub-strategy re-ranks all 43 ETFs every day and holds the top five *eligible*
+names, where eligibility is `slow_signal > 0` and — on days the exogenous
+analyze gate (`data/overbought_individual.csv`) is active — *not* individually
+overbought (close ≥ 1.05 × its 20-day SMA **or** ≥ 1.07 × its 50-day SMA).
+Screened-out names yield their slot to the next ranked name; there is no timer,
+so a name reclaims its slot the moment it cools off. The Phase 2 market mask is
+applied last, unchanged.
+
+| Metric | Phase 1 | Phase 1+2 | Phase 2b | Daily-rebal (screen off) |
+|--------|---------|-----------|----------|--------------------------|
+| Total return | 110.99% | 136.18% | 124.30% | 108.61% |
+| Annualized return | 10.63% | 13.05% | 11.91% | 10.41% |
+| Annualized volatility | 16.21% | 13.40% | 13.80% | 16.08% |
+| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.65 |
+| Max drawdown | −28.54% | −23.90% | −24.04% | −27.88% |
+
+The last column is a diagnostic — the daily ranking with no screen and no market
+mask — and lands almost on Phase 1, isolating the individual screen's effect from
+the switch to a daily rebalance. See [RESULTS.md](RESULTS.md) and
+[docs/individual_overbought_methodology.md](docs/individual_overbought_methodology.md)
+(six analyze dates, 2025-09-05 … 2025-09-12, are imputed).
+
 ## Layout
 
 ```

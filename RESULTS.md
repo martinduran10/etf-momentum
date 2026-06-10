@@ -186,6 +186,56 @@ volatility (16.21% → 13.40%) and a shallower maximum drawdown (−28.5% →
 from sidestepping clusters of bad days rather than from amplifying good ones
 — consistent with an overbought-avoidance rule.
 
+## Phase 2b: Individual-ETF Overbought Filter
+
+Phase 2b is a second **purely additive overlay**. Where Phase 1 rebalances every
+20 trading days, Phase 2b **rebalances daily**: each of the four sub-strategies
+re-ranks all 43 ETFs by its slow signal every day and holds the top five
+*eligible* names. A name is eligible when its `slow_signal > 0` **and** — only on
+days the exogenous analyze gate is active (`analyze == 1` in
+`data/overbought_individual.csv`) — it is **not individually overbought**.
+
+An ETF is individually overbought on a day when its close is **at or above
+`1.05 ×` its 20-day SMA, or at or above `1.07 ×` its 50-day SMA** (simple moving
+averages of that ETF's own close; either condition is enough). The exclusion has
+**no timer** — a name is dropped only on days it is overbought and reclaims its
+slot the moment it cools off. When a top name is screened out, its slot passes to
+the next eligible name down the ranking; if fewer than five names are eligible,
+the remaining slots are cash. As in Phase 1 the roster held on day `t` is chosen
+from data through `t-1` (`roster_lag = 1`, no look-ahead), the subs combine as a
+simple mean phased in by start date, and the **Phase 2 market cash mask is
+applied last and unchanged**. See
+[`docs/individual_overbought_methodology.md`](docs/individual_overbought_methodology.md)
+for the gate and the individual-overbought test; note that six analyze dates
+(2025-09-05 … 2025-09-12) are imputed.
+
+### Comparison
+
+![Phase 2b vs Phase 1 / Phase 1+2](reports/figures/phase2b_comparison.png)
+
+| Metric | Phase 1 | Phase 1+2 | Phase 2b | Daily-rebal (screen off) |
+|--------|---------|-----------|----------|--------------------------|
+| Total return | 110.99% | 136.18% | 124.30% | 108.61% |
+| Annualized return | 10.63% | 13.05% | 11.91% | 10.41% |
+| Annualized volatility | 16.21% | 13.40% | 13.80% | 16.08% |
+| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.65 |
+| Max drawdown | −28.54% | −23.90% | −24.04% | −27.88% |
+
+The last column is a **diagnostic**: the same daily top-5 ranking with **no**
+individual screen and **no** market mask. It lands almost on top of Phase 1
+(108.61% vs 110.99%, Sharpe 0.65 vs 0.66), confirming that switching from a
+20-day to a daily rebalance is, on its own, close to neutral — so the gap
+between Phase 2b and that diagnostic is attributable to the individual screen and
+the market mask rather than to the rebalance-frequency change. Phase 2b lands
+between Phase 1 and Phase 1+2: the individual screen trims some of the upside the
+market filter alone captures, while keeping the bulk of its volatility and
+drawdown reduction (16.21% → 13.80% vol; −28.5% → −24.0% max DD).
+
+> **Empirical mode, no target.** Phase 2b has no published headline to match; its
+> tests pin mechanics (the overbought formula and its boundaries, the analyze
+> gate, daily selection / substitution / cash, the no-timer swap-back, and the
+> no-look-ahead lag), not production numbers.
+
 ## Reproducing
 
 ```bash
@@ -195,6 +245,6 @@ python scripts/run_stack_backtest.py  # regenerate figures + tables
 ```
 
 Outputs land in `reports/figures/` (`equity_curve.png`, `drawdown.png`,
-`stack_vs_spy.png`, `stack_filtered_vs_unfiltered.png`) and `reports/tables/`
-(`metrics_summary.csv`, `sub_strategy_metrics.csv`, `spy_comparison.csv`,
-`phase2_comparison.csv`).
+`stack_vs_spy.png`, `stack_filtered_vs_unfiltered.png`, `phase2b_comparison.png`)
+and `reports/tables/` (`metrics_summary.csv`, `sub_strategy_metrics.csv`,
+`spy_comparison.csv`, `phase2_comparison.csv`, `phase2b_comparison.csv`).
