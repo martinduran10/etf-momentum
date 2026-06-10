@@ -135,8 +135,12 @@ artifact. Unlike Phase 1's 20-day rebalance, **Phase 2b rebalances daily**.
   that ETF's own close over 20 and 50 trading days. Either leg true ⇒ excluded.
   An ETF without a full window is not flagged (NaN comparisons are `False`; no
   fillna, no special-case).
-- **No timer**: a name is excluded only on days it is overbought; eligible again
-  the moment it is not (swap-back is automatic from the daily recompute).
+- **No timer by default** (`cooldown_days=0`): a name is excluded only on days it
+  is overbought; eligible again the moment it is not (swap-back is automatic from
+  the daily recompute). An optional `cooldown_days=N` additionally bars a flagged
+  name for the next N trading days (a fresh flag resets the clock, overlapping
+  bars merge, the bar persists across `analyze==0` days but no new bar starts
+  there). `cooldown_days=0` is a strict no-op that reproduces the base Phase 2b.
 - Hold the **top 5 eligible** names by descending `slow_signal`; walk down the
   ranking to fill 5 slots from eligible names only, remaining slots cash. Never
   reach into `slow_signal <= 0` names.
@@ -157,19 +161,24 @@ phased in by start date). The **Phase 2 market cash mask is applied last and
 unchanged** (reuse `overbought_filter`): a Phase 2 cash day is cash regardless of
 the 2b roster.
 
-**Diagnostic.** A "daily-rebalanced, screen OFF" series (same daily top-5 on
-positive signal, no individual screen, no market mask) isolates the
-daily-rebalance change from the filter's effect.
+**Attribution / diagnostic series.** Two screen-off series isolate the drivers:
+"daily-rebal + mask (screen off)" (daily top-5 on positive signal + the Phase 2
+mask, no individual screen) and "daily-rebal (screen off)" (same, no mask). A
+"Phase 2b + 5d cooldown" variant (`cooldown_days=5`) is also reported.
 
-**No validation target** (empirical mode; tests pin mechanics, not numbers):
+**No validation target** (empirical mode; tests pin mechanics, not numbers). Over
+the headline window the highest Sharpe is Phase 1+2 (0.97); neither the
+individual screen nor the 5-day cooldown raises risk-adjusted return here (Phase
+2b 0.86 < daily-rebal+mask 0.91; the cooldown is lower than no-timer Phase 2b on
+every metric):
 
-| Metric | Phase 1 | Phase 1+2 | Phase 2b | Daily-rebal (screen off) |
-|--------|---------|-----------|----------|--------------------------|
-| Total return | 110.99% | 136.18% | 124.30% | 108.61% |
-| Annualized return | 10.63% | 13.05% | 11.91% | 10.41% |
-| Annualized volatility | 16.21% | 13.40% | 13.80% | 16.08% |
-| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.65 |
-| Max drawdown | −28.54% | −23.90% | −24.04% | −27.88% |
+| Metric | Phase 1 | Phase 1+2 | Phase 2b | Phase 2b + 5d cooldown | Daily-rebal + mask (screen off) | Daily-rebal (screen off) |
+|--------|---------|-----------|----------|------------------------|---------------------------------|--------------------------|
+| Total return | 110.99% | 136.18% | 124.30% | 120.39% | 126.80% | 108.61% |
+| Annualized return | 10.63% | 13.05% | 11.91% | 11.54% | 12.15% | 10.41% |
+| Annualized volatility | 16.21% | 13.40% | 13.80% | 14.34% | 13.38% | 16.08% |
+| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.80 | 0.91 | 0.65 |
+| Max drawdown | −28.54% | −23.90% | −24.04% | −25.82% | −24.04% | −27.88% |
 
 ## Layout
 

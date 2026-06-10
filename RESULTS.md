@@ -209,32 +209,46 @@ applied last and unchanged**. See
 for the gate and the individual-overbought test; note that six analyze dates
 (2025-09-05 … 2025-09-12) are imputed.
 
+The selection logic also exposes a `cooldown_days` parameter (default `0`, the
+no-timer behavior above). The comparison below adds a **5-day cooldown** variant
+— a flagged name is barred for the next five trading days even if it cools
+sooner, with a fresh flag restarting the count and overlapping bars merging —
+and two attribution series that isolate where the effect comes from.
+
 ### Comparison
 
-![Phase 2b vs Phase 1 / Phase 1+2](reports/figures/phase2b_comparison.png)
+![Phase 2b variants vs Phase 1 / Phase 1+2](reports/figures/phase2b_comparison.png)
 
-| Metric | Phase 1 | Phase 1+2 | Phase 2b | Daily-rebal (screen off) |
-|--------|---------|-----------|----------|--------------------------|
-| Total return | 110.99% | 136.18% | 124.30% | 108.61% |
-| Annualized return | 10.63% | 13.05% | 11.91% | 10.41% |
-| Annualized volatility | 16.21% | 13.40% | 13.80% | 16.08% |
-| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.65 |
-| Max drawdown | −28.54% | −23.90% | −24.04% | −27.88% |
+| Metric | Phase 1 | Phase 1+2 | Phase 2b | Phase 2b + 5d cooldown | Daily-rebal + mask (screen off) | Daily-rebal (screen off) |
+|--------|---------|-----------|----------|------------------------|---------------------------------|--------------------------|
+| Total return | 110.99% | 136.18% | 124.30% | 120.39% | 126.80% | 108.61% |
+| Annualized return | 10.63% | 13.05% | 11.91% | 11.54% | 12.15% | 10.41% |
+| Annualized volatility | 16.21% | 13.40% | 13.80% | 14.34% | 13.38% | 16.08% |
+| Sharpe ratio | 0.66 | 0.97 | 0.86 | 0.80 | 0.91 | 0.65 |
+| Max drawdown | −28.54% | −23.90% | −24.04% | −25.82% | −24.04% | −27.88% |
 
-The last column is a **diagnostic**: the same daily top-5 ranking with **no**
-individual screen and **no** market mask. It lands almost on top of Phase 1
-(108.61% vs 110.99%, Sharpe 0.65 vs 0.66), confirming that switching from a
-20-day to a daily rebalance is, on its own, close to neutral — so the gap
-between Phase 2b and that diagnostic is attributable to the individual screen and
-the market mask rather than to the rebalance-frequency change. Phase 2b lands
-between Phase 1 and Phase 1+2: the individual screen trims some of the upside the
-market filter alone captures, while keeping the bulk of its volatility and
-drawdown reduction (16.21% → 13.80% vol; −28.5% → −24.0% max DD).
+The two right-hand columns are attribution series. **Daily-rebal (screen off)** —
+the daily top-5 ranking with no individual screen and no market mask — lands
+almost on Phase 1 (108.61% / Sharpe 0.65 vs 110.99% / 0.66), so switching from a
+20-day to a daily rebalance is close to neutral on its own. **Daily-rebal + mask
+(screen off)** adds the Phase 2 market mask to that daily ranking and posts the
+highest Sharpe of any Phase 2b-family series (0.91); the market mask accounts for
+most of the effect.
+
+Reading across the row factually: the highest Sharpe in the table is **Phase 1+2
+(0.97)**, the 20-day-rebalanced market filter. Adding the individual screen
+(Phase 2b) lowers Sharpe from the 0.91 of daily-rebal+mask to 0.86 and total
+return from 126.80% to 124.30% — over this window the screen does not raise
+risk-adjusted return relative to the market mask alone. The **5-day cooldown is
+lower than no-timer Phase 2b on every metric shown** — total return 120.39% vs
+124.30%, volatility 14.34% vs 13.80%, max drawdown −25.82% vs −24.04%, Sharpe
+0.80 vs 0.86 — so the fixed timer does not help here.
 
 > **Empirical mode, no target.** Phase 2b has no published headline to match; its
 > tests pin mechanics (the overbought formula and its boundaries, the analyze
-> gate, daily selection / substitution / cash, the no-timer swap-back, and the
-> no-look-ahead lag), not production numbers.
+> gate, daily selection / substitution / cash, the no-timer swap-back, the
+> fixed-N-day cooldown and its clock reset, and the no-look-ahead lag), not
+> production numbers.
 
 ## Reproducing
 

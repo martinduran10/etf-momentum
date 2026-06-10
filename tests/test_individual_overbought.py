@@ -210,6 +210,97 @@ def test_cooled_off_name_reclaims_slot_next_day() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Cooldown timer (cooldown_days) and the screen-off attribution path
+# --------------------------------------------------------------------------- #
+
+
+def test_cooldown_zero_is_no_timer() -> None:
+    """cooldown_days=0 reproduces the no-timer behavior: eligible next day."""
+    idx = _days(3)
+    slow = pd.DataFrame({"a": [1.0, 1.0, 1.0]}, index=idx)
+    overbought = pd.DataFrame({"a": [True, False, False]}, index=idx)
+    analyze = pd.Series([1, 1, 1], index=idx)
+
+    eligible = compute_eligibility(
+        slow, overbought, analyze, screen=True, cooldown_days=0
+    )
+    assert not eligible["a"].iloc[0]  # flagged on day 0
+    assert eligible["a"].iloc[1]  # cooled -> eligible immediately, no timer
+
+
+def test_cooldown_five_bars_exactly_five_days_after_a_flag() -> None:
+    """A name flagged only on day 0 stays barred days 1-5, eligible on day 6.
+
+    The flag day itself is excluded by the same-day screen; the cooldown adds
+    the next five trading days even though the name has already cooled.
+    """
+    idx = _days(8)
+    slow = pd.DataFrame({"a": [1.0] * 8}, index=idx)
+    overbought = pd.DataFrame({"a": [True] + [False] * 7}, index=idx)
+    analyze = pd.Series([1] * 8, index=idx)
+
+    eligible = compute_eligibility(
+        slow, overbought, analyze, screen=True, cooldown_days=5
+    )
+    for d in range(6):  # day 0 (screen) + days 1-5 (cooldown)
+        assert not eligible["a"].iloc[d], d
+    assert eligible["a"].iloc[6]  # cooldown expired
+    assert eligible["a"].iloc[7]
+
+
+def test_cooldown_fresh_flag_resets_the_clock() -> None:
+    """A second flag while barred restarts the five-day count (windows merge)."""
+    idx = _days(10)
+    slow = pd.DataFrame({"a": [1.0] * 10}, index=idx)
+    # Hits on day 0 and day 2.
+    overbought = pd.DataFrame(
+        {"a": [True, False, True] + [False] * 7}, index=idx
+    )
+    analyze = pd.Series([1] * 10, index=idx)
+
+    eligible = compute_eligibility(
+        slow, overbought, analyze, screen=True, cooldown_days=5
+    )
+    # Latest hit is day 2 -> barred through day 7, eligible on day 8.
+    for d in range(8):
+        assert not eligible["a"].iloc[d], d
+    assert eligible["a"].iloc[8]
+
+
+def test_cooldown_bar_persists_across_analyze_zero_day() -> None:
+    """An existing bar keeps counting on analyze==0 days, and an overbought
+    reading on such a day starts no new bar."""
+    idx = _days(8)
+    slow = pd.DataFrame({"a": [1.0] * 8}, index=idx)
+    # Overbought on day 0 (analyze on) and day 3 (analyze OFF).
+    overbought = pd.DataFrame(
+        {"a": [True, False, False, True, False, False, False, False]}, index=idx
+    )
+    analyze = pd.Series([1, 1, 1, 0, 1, 1, 1, 1], index=idx)
+
+    eligible = compute_eligibility(
+        slow, overbought, analyze, screen=True, cooldown_days=5
+    )
+    # Only day 0 is a hit (day 3's overbought is ignored: analyze==0).
+    assert not eligible["a"].iloc[3]  # bar from day 0 persists across analyze==0
+    assert eligible["a"].iloc[6]  # day-3 overbought did NOT extend the clock
+
+
+def test_screen_off_ignores_overbought_and_cooldown() -> None:
+    """The attribution path (screen off) excludes nothing for overbought reasons,
+    even with a cooldown set."""
+    idx = _days(3)
+    slow = pd.DataFrame({"a": [1.0, -1.0, 2.0]}, index=idx)
+    overbought = pd.DataFrame({"a": [True, True, True]}, index=idx)
+    analyze = pd.Series([1, 1, 1], index=idx)
+
+    eligible = compute_eligibility(
+        slow, overbought, analyze, screen=False, cooldown_days=5
+    )
+    pd.testing.assert_frame_equal(eligible, slow > 0)
+
+
+# --------------------------------------------------------------------------- #
 # No-look-ahead roster lag
 # --------------------------------------------------------------------------- #
 

@@ -116,17 +116,54 @@ def compute_overbought_flags(closes: pd.DataFrame) -> pd.DataFrame:
     return short_hot | long_hot
 
 
+def _cooldown_bar(blocked: pd.DataFrame, cooldown_days: int) -> pd.DataFrame:
+    """Bar each name for the ``cooldown_days`` trading days after a screen hit.
+
+    A screen hit on decision day ``d`` (``blocked[d]`` is ``True``) bars the name
+    on the following ``cooldown_days`` decision days ``d+1 .. d+cooldown_days``.
+    The bar is the union of those windows over all hits, so a fresh hit while a
+    name is still barred restarts the count and overlapping bars merge:
+    ``barred[d'] = OR(blocked[d'-1], .., blocked[d'-cooldown_days])``.
+
+    Parameters
+    ----------
+    blocked : pandas.DataFrame of bool
+        Same-day screen hits per ETF (``overbought and analyze == 1``).
+    cooldown_days : int
+        Number of trading days a name stays barred after a hit (``> 0``).
+
+    Returns
+    -------
+    pandas.DataFrame of bool
+        ``True`` where a name is barred by the cooldown, aligned to ``blocked``.
+
+    Notes
+    -----
+    Because the offsets are strictly positive (``1 .. cooldown_days``),
+    ``barred[d']`` depends only on hits strictly before ``d'`` — preserving the
+    no-look-ahead guarantee. This is the same shift-OR shape as
+    :func:`src.overbought_filter.build_cash_mask`, with offsets ``1..N`` instead
+    of the market filter's ``3..6``.
+    """
+    barred = pd.DataFrame(False, index=blocked.index, columns=blocked.columns)
+    for k in range(1, cooldown_days + 1):
+        barred |= blocked.shift(k, fill_value=False)
+    return barred
+
+
 def compute_eligibility(
     slow_signal: pd.DataFrame,
     overbought: pd.DataFrame,
     analyze_gate: pd.Series,
     screen: bool = True,
+    cooldown_days: int = 0,
 ) -> pd.DataFrame:
     """Compute the per-day, per-ETF eligibility mask.
 
     An ETF is eligible on a day when its slow signal is strictly positive and,
     when the screen is active (``screen`` is ``True`` *and* ``analyze == 1`` that
-    day), it is not individually overbought.
+    day), it is not individually overbought. With ``cooldown_days > 0`` a name
+    also stays barred for that many trading days after each overbought flag.
 
     Parameters
     ----------
@@ -139,7 +176,14 @@ def compute_eligibility(
     screen : bool, optional
         Whether to apply the individual-overbought screen at all (default
         ``True``). When ``False`` the eligibility reduces to ``slow_signal > 0``
-        — the daily-rebalanced, screen-off diagnostic.
+        — the daily-rebalanced, screen-off diagnostic — and ``cooldown_days`` has
+        no effect (there are no screen hits to start a cooldown).
+    cooldown_days : int, optional
+        Trading days a name remains barred after a screen hit (default ``0`` —
+        the no-timer behavior in which a name is eligible again the moment it
+        stops being overbought). Screen hits are gated by ``analyze``, so no new
+        cooldown starts on ``analyze == 0`` days, though an existing bar keeps
+        counting through them.
 
     Returns
     -------
@@ -158,7 +202,10 @@ def compute_eligibility(
             slow_signal.index, fill_value=0
         ).eq(1)
         blocked = overbought.mul(screen_active.astype(int), axis=0).astype(bool)
-        eligible = eligible & ~blocked
+        exclusion = blocked
+        if cooldown_days > 0:
+            exclusion = exclusion | _cooldown_bar(blocked, cooldown_days)
+        eligible = eligible & ~exclusion
     return eligible
 
 
@@ -253,6 +300,7 @@ def run_sub_strategy_2b(
     analyze_gate: pd.Series,
     screen: bool = True,
     roster_lag: int = 1,
+    cooldown_days: int = 0,
 ) -> SubStrategyResult:
     """Run one Phase 2b sub-strategy (daily-rebalanced, screened selection).
 
@@ -272,6 +320,9 @@ def run_sub_strategy_2b(
         Apply the individual-overbought screen (default ``True``).
     roster_lag : int, optional
         No-look-ahead roster lag (default ``1``).
+    cooldown_days : int, optional
+        Trading days a name stays barred after a screen hit (default ``0`` — no
+        timer). See :func:`compute_eligibility`.
 
     Returns
     -------
@@ -284,7 +335,11 @@ def run_sub_strategy_2b(
 
     slow_signal = compute_slow_signal(risk_adj_return, config.lookback)
     eligible = compute_eligibility(
-        slow_signal, overbought, analyze_gate, screen=screen
+        slow_signal,
+        overbought,
+        analyze_gate,
+        screen=screen,
+        cooldown_days=cooldown_days,
     )
     selected = select_daily_roster(slow_signal, eligible, start_idx)
     returns = sub_returns_from_selection(
@@ -301,6 +356,7 @@ def run_individual_overbought(
     configs: tuple[SubStrategyConfig, ...] = SUB_STRATEGIES,
     screen: bool = True,
     roster_lag: int = 1,
+    cooldown_days: int = 0,
 ) -> dict[str, object]:
     """Run the daily-rebalanced Phase 2b portfolio (before the market mask).
 
@@ -321,6 +377,9 @@ def run_individual_overbought(
         for the daily-rebalanced, screen-off diagnostic.
     roster_lag : int, optional
         No-look-ahead roster lag (default ``1``).
+    cooldown_days : int, optional
+        Trading days a name stays barred after a screen hit (default ``0`` — no
+        timer; the original Phase 2b behavior). See :func:`compute_eligibility`.
 
     Returns
     -------
@@ -344,6 +403,7 @@ def run_individual_overbought(
             analyze_gate,
             screen=screen,
             roster_lag=roster_lag,
+            cooldown_days=cooldown_days,
         )
         for cfg in configs
     }

@@ -112,6 +112,7 @@ def _save_phase2b_comparison(
     phase1: pd.Series,
     phase12: pd.Series,
     phase2b: pd.Series,
+    phase2b_cooldown: pd.Series,
     path: Path,
 ) -> None:
     fig, ax = plt.subplots(figsize=(11, 5))
@@ -119,10 +120,11 @@ def _save_phase2b_comparison(
         (phase1, "#1f4e79", "Phase 1"),
         (phase12, "#2a8f3a", "Phase 1+2 (market filter)"),
         (phase2b, "#9b2f8f", "Phase 2b (individual screen)"),
+        (phase2b_cooldown, "#d98c00", "Phase 2b + 5d cooldown"),
     ):
         curve = equity_curve(returns) * 100.0
         ax.plot(curve.index, curve.values, color=color, lw=1.4, label=label)
-    ax.set_title("Stack Portfolio — Phase 2b vs Phase 1 / Phase 1+2")
+    ax.set_title("Stack Portfolio — Phase 2b variants vs Phase 1 / Phase 1+2")
     ax.set_ylabel("Cumulative return (%)")
     ax.set_xlabel("Date")
     ax.axhline(0, color="grey", lw=0.7)
@@ -224,17 +226,29 @@ def main() -> None:
     phase2b_filtered = apply_filter(phase2b_headline, cash_mask)
     phase2b_metrics = summary(phase2b_filtered)
 
+    # Variant: same screen with a fixed 5-trading-day cooldown after each flag.
+    phase2b_cd = run_individual_overbought(closes, screen=True, cooldown_days=5)
+    phase2b_cd_filtered = apply_filter(phase2b_cd["headline_returns"], cash_mask)
+    phase2b_cd_metrics = summary(phase2b_cd_filtered)
+
     # Diagnostic: daily-rebalanced, individual screen OFF, no market mask —
     # isolates the daily-rebalance change from the filter's effect.
     diag = run_individual_overbought(closes, screen=False)
     diag_headline = diag["headline_returns"]
     diag_metrics = summary(diag_headline)
 
+    # Attribution: the screen-off series with the market mask applied — isolates
+    # the individual screen's effect from the market mask alone.
+    attribution_filtered = apply_filter(diag_headline, cash_mask)
+    attribution_metrics = summary(attribution_filtered)
+
     phase2b_comparison = pd.DataFrame(
         {
             "Phase 1": metrics,
             "Phase 1+2": filtered_metrics,
             "Phase 2b": phase2b_metrics,
+            "Phase 2b + 5d cooldown": phase2b_cd_metrics,
+            "Daily-rebal + mask (screen off)": attribution_metrics,
             "Daily-rebal (screen off)": diag_metrics,
         }
     )
@@ -252,6 +266,7 @@ def main() -> None:
         headline,
         filtered_headline,
         phase2b_filtered,
+        phase2b_cd_filtered,
         FIGURES_DIR / "phase2b_comparison.png",
     )
 
@@ -283,6 +298,18 @@ def main() -> None:
         f"  Annualized vol     : {phase2b_metrics['annualized_volatility']:.2%}",
         f"  Sharpe ratio       : {phase2b_metrics['sharpe_ratio']:.2f}",
         f"  Max drawdown       : {phase2b_metrics['max_drawdown']:.2%}",
+        "Phase 2b + 5d cooldown (screen + 5-day bar + market mask):",
+        f"  Total return       : {phase2b_cd_metrics['total_return']:.2%}",
+        f"  Annualized return  : {phase2b_cd_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {phase2b_cd_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {phase2b_cd_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {phase2b_cd_metrics['max_drawdown']:.2%}",
+        "Attribution — daily-rebalanced + market mask, screen off:",
+        f"  Total return       : {attribution_metrics['total_return']:.2%}",
+        f"  Annualized return  : {attribution_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {attribution_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {attribution_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {attribution_metrics['max_drawdown']:.2%}",
         "Diagnostic — daily-rebalanced, screen off, no market mask:",
         f"  Total return       : {diag_metrics['total_return']:.2%}",
         f"  Annualized return  : {diag_metrics['annualized_return']:.2%}",

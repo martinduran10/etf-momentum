@@ -44,6 +44,21 @@ recompute.
 The screen only *acts* on days the analyze gate is active (`analyze == 1`). On
 `analyze == 0` days the overbought flags are computed but ignored.
 
+## Optional cooldown timer
+
+The selection logic exposes a `cooldown_days` parameter (default `0`). With
+`cooldown_days = 0` the screen is the no-timer rule above. With
+`cooldown_days = N > 0`, a name flagged overbought on a decision day is barred
+for the **next N trading days** as well, even if it cools sooner. A fresh flag
+while the name is still barred restarts the N-day count, and overlapping bars
+merge — equivalently, the name is barred whenever it was flagged on any of the
+previous N decision days. Because flags are gated by the analyze gate, no new bar
+starts on `analyze == 0` days, but an existing bar keeps counting through them.
+The minimum one-day offset preserves the no-look-ahead property (a day's bar
+depends only on flags strictly before it). The shipped `cooldown_days = 0` keeps
+the base Phase 2b behavior; a `cooldown_days = 5` variant is reported in
+`RESULTS.md` for comparison.
+
 ## The 6 imputed analyze dates
 
 Six consecutive rows in `data/overbought_individual.csv` are **imputed** rather
