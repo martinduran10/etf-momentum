@@ -44,6 +44,8 @@ import numpy as np
 import pandas as pd
 
 from .data import DATA_DIR, compute_simple_returns
+from .metrics import summary
+from .overbought_filter import apply_filter
 from .signals import compute_risk_adj_return, compute_slow_signal
 from .stack_backtest import (
     HEADLINE_START,
@@ -61,6 +63,16 @@ SMA_LONG_WINDOW = 50
 #: Overbought multipliers applied to the short / long SMA.
 SMA_SHORT_MULTIPLIER = 1.05
 SMA_LONG_MULTIPLIER = 1.07
+
+#: (sma20_pct, sma50_pct) pairs swept by :func:`run_threshold_sweep`. The first
+#: pair is the canonical 5% / 7% screen; the rest loosen both legs together.
+DEFAULT_THRESHOLD_GRID: tuple[tuple[float, float], ...] = (
+    (0.05, 0.07),
+    (0.06, 0.08),
+    (0.07, 0.09),
+    (0.08, 0.10),
+    (0.10, 0.12),
+)
 
 
 def load_analyze_gate(path: Path | str | None = None) -> pd.Series:
@@ -85,18 +97,32 @@ def load_analyze_gate(path: Path | str | None = None) -> pd.Series:
     return df.set_index("date").sort_index()["analyze"].astype(int)
 
 
-def compute_overbought_flags(closes: pd.DataFrame) -> pd.DataFrame:
+def compute_overbought_flags(
+    closes: pd.DataFrame,
+    sma20_pct: float | None = None,
+    sma50_pct: float | None = None,
+) -> pd.DataFrame:
     """Flag each ETF on each day as individually overbought.
 
-    An ETF is overbought when its close is at or above
-    ``SMA_SHORT_MULTIPLIER`` x its ``SMA_SHORT_WINDOW``-day SMA **or** at or
-    above ``SMA_LONG_MULTIPLIER`` x its ``SMA_LONG_WINDOW``-day SMA. The
-    comparison is inclusive (``>=``) on both legs.
+    An ETF is overbought when its close is at or above ``(1 + sma20_pct)`` x its
+    ``SMA_SHORT_WINDOW``-day SMA **or** at or above ``(1 + sma50_pct)`` x its
+    ``SMA_LONG_WINDOW``-day SMA. The comparison is inclusive (``>=``) on both
+    legs.
 
     Parameters
     ----------
     closes : pandas.DataFrame
         Close prices indexed by date, one column per ticker.
+    sma20_pct : float, optional
+        Fractional stretch above the 20-day SMA that counts as overbought. The
+        default ``None`` uses the canonical 5% threshold (the literal
+        ``SMA_SHORT_MULTIPLIER`` multiplier), keeping the default path
+        bit-identical to the frozen Phase 2b run. Any explicit value uses the
+        multiplier ``1 + sma20_pct`` instead (e.g. ``0.06`` for 6%).
+    sma50_pct : float, optional
+        Fractional stretch above the 50-day SMA. ``None`` uses the canonical 7%
+        threshold (``SMA_LONG_MULTIPLIER``); an explicit value uses
+        ``1 + sma50_pct``.
 
     Returns
     -------
@@ -109,10 +135,12 @@ def compute_overbought_flags(closes: pd.DataFrame) -> pd.DataFrame:
     against NaN evaluate to ``False``, so such ETFs are simply not flagged. No
     ``fillna`` or special-casing is applied.
     """
+    short_mult = SMA_SHORT_MULTIPLIER if sma20_pct is None else 1.0 + sma20_pct
+    long_mult = SMA_LONG_MULTIPLIER if sma50_pct is None else 1.0 + sma50_pct
     sma_short = closes.rolling(window=SMA_SHORT_WINDOW).mean()
     sma_long = closes.rolling(window=SMA_LONG_WINDOW).mean()
-    short_hot = closes >= SMA_SHORT_MULTIPLIER * sma_short
-    long_hot = closes >= SMA_LONG_MULTIPLIER * sma_long
+    short_hot = closes >= short_mult * sma_short
+    long_hot = closes >= long_mult * sma_long
     return short_hot | long_hot
 
 
@@ -357,6 +385,8 @@ def run_individual_overbought(
     screen: bool = True,
     roster_lag: int = 1,
     cooldown_days: int = 0,
+    sma20_pct: float | None = None,
+    sma50_pct: float | None = None,
 ) -> dict[str, object]:
     """Run the daily-rebalanced Phase 2b portfolio (before the market mask).
 
@@ -380,6 +410,10 @@ def run_individual_overbought(
     cooldown_days : int, optional
         Trading days a name stays barred after a screen hit (default ``0`` — no
         timer; the original Phase 2b behavior). See :func:`compute_eligibility`.
+    sma20_pct, sma50_pct : float, optional
+        Overbought-threshold overrides forwarded to
+        :func:`compute_overbought_flags`. ``None`` (default) uses the canonical
+        5% / 7% thresholds, keeping this run bit-identical to the frozen Phase 2b.
 
     Returns
     -------
@@ -391,7 +425,7 @@ def run_individual_overbought(
     """
     simple_returns = compute_simple_returns(closes)
     risk_adj_return = compute_risk_adj_return(closes)
-    overbought = compute_overbought_flags(closes)
+    overbought = compute_overbought_flags(closes, sma20_pct, sma50_pct)
     analyze_gate = load_analyze_gate()
 
     sub_results = {
@@ -430,3 +464,63 @@ def run_individual_overbought(
         "sub_results": sub_results,
         "headline_returns": headline_returns,
     }
+
+
+def run_threshold_sweep(
+    closes: pd.DataFrame,
+    cash_mask: pd.Series,
+    grid: tuple[tuple[float, float], ...] = DEFAULT_THRESHOLD_GRID,
+    cooldown_days: int = 0,
+) -> pd.DataFrame:
+    """Sweep the individual-overbought thresholds and tabulate headline metrics.
+
+    For each ``(sma20_pct, sma50_pct)`` pair the full Phase 2b backtest is run
+    (all four sub-strategies, screen on, the given cooldown) and the Phase 2
+    market cash mask is applied last — reusing :func:`run_individual_overbought`,
+    :func:`src.overbought_filter.apply_filter`, and :func:`src.metrics.summary`
+    rather than re-implementing any backtest logic. This is a sensitivity
+    analysis: the full grid is reported and no threshold is adopted.
+
+    Parameters
+    ----------
+    closes : pandas.DataFrame
+        Close prices indexed by date, one column per ticker.
+    cash_mask : pandas.Series of bool
+        The Phase 2 market cash mask, applied last to each variant.
+    grid : tuple of (float, float), optional
+        ``(sma20_pct, sma50_pct)`` pairs to evaluate (default
+        :data:`DEFAULT_THRESHOLD_GRID`). The first pair should be the canonical
+        ``(0.05, 0.07)`` so the sweep includes the shipped Phase 2b screen.
+    cooldown_days : int, optional
+        Cooldown forwarded to each run (default ``0`` — no timer, isolating the
+        threshold effect).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per pair with columns ``sma20_pct``, ``sma50_pct``,
+        ``total_return``, ``sharpe``, ``max_dd`` (headline window).
+    """
+    rows = []
+    for sma20_pct, sma50_pct in grid:
+        result = run_individual_overbought(
+            closes,
+            screen=True,
+            cooldown_days=cooldown_days,
+            sma20_pct=sma20_pct,
+            sma50_pct=sma50_pct,
+        )
+        filtered = apply_filter(result["headline_returns"], cash_mask)
+        metrics = summary(filtered)
+        rows.append(
+            {
+                "sma20_pct": sma20_pct,
+                "sma50_pct": sma50_pct,
+                "total_return": metrics["total_return"],
+                "sharpe": metrics["sharpe_ratio"],
+                "max_dd": metrics["max_drawdown"],
+            }
+        )
+    return pd.DataFrame(rows, columns=[
+        "sma20_pct", "sma50_pct", "total_return", "sharpe", "max_dd"
+    ])

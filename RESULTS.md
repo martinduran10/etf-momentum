@@ -250,6 +250,39 @@ lower than no-timer Phase 2b on every metric shown** — total return 120.39% vs
 > fixed-N-day cooldown and its clock reset, and the no-look-ahead lag), not
 > production numbers.
 
+### Threshold robustness
+
+The screen's 5% / 7% cut points are arbitrary, so they were swept as a
+sensitivity check — each pair run through the full Phase 2b backtest (all four
+sub-strategies, screen on, no cooldown, market mask applied last) and measured
+over the headline window. **This is sensitivity analysis; no threshold is adopted
+and the default stays 5% / 7%.**
+
+![Phase 2b threshold sweep](reports/phase2b_threshold_sweep.png)
+
+| SMA20% / SMA50% | Total return | Sharpe | Max drawdown |
+|-----------------|--------------|--------|--------------|
+| 5% / 7% (default) | 124.30% | 0.86 | −24.04% |
+| 6% / 8% | 126.14% | 0.89 | −24.04% |
+| 7% / 9% | 129.22% | 0.91 | −24.04% |
+| 8% / 10% | 130.92% | 0.93 | −24.04% |
+| 10% / 12% | 129.68% | 0.92 | −24.04% |
+| *Phase 1+2 (reference)* | *136.18%* | *0.97* | *−23.90%* |
+| *Screen-off ceiling — daily-rebal + mask (reference)* | *126.80%* | *0.91* | *−24.04%* |
+
+Reading the grid factually: every swept threshold stays below the plain market
+filter Phase 1+2 (Sharpe 0.97). The shipped 5% / 7% screen is the **lowest-Sharpe
+point in the grid (0.86)** and sits below the screen-off reference of 0.91 — at
+the default cut points the individual screen detracts relative to running no
+screen at all. Loosening the thresholds raises Sharpe through 8% / 10% (0.86 →
+0.89 → 0.91 → 0.93) and then flattens (10% / 12%: 0.92). Note the screened Sharpe
+**exceeds** the screen-off reference at 7% / 9% and looser, so that reference —
+labeled "ceiling" in the figure to match the artifact — is a reference point, not
+an upper bound on the screened result. Maximum drawdown is identical (−24.04%)
+across every screened threshold; the worst peak-to-trough is set by the
+market-mask cash path, not by which names the individual screen drops. No swept
+value is adopted; the default remains 5% / 7%.
+
 ## Reproducing
 
 ```bash
@@ -261,4 +294,5 @@ python scripts/run_stack_backtest.py  # regenerate figures + tables
 Outputs land in `reports/figures/` (`equity_curve.png`, `drawdown.png`,
 `stack_vs_spy.png`, `stack_filtered_vs_unfiltered.png`, `phase2b_comparison.png`)
 and `reports/tables/` (`metrics_summary.csv`, `sub_strategy_metrics.csv`,
-`spy_comparison.csv`, `phase2_comparison.csv`, `phase2b_comparison.csv`).
+`spy_comparison.csv`, `phase2_comparison.csv`, `phase2b_comparison.csv`), plus the
+threshold sweep at `reports/phase2b_threshold_sweep.{csv,png}`.

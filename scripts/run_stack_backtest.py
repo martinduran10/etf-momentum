@@ -29,7 +29,10 @@ from src.benchmarks import (  # noqa: E402
     spy_buy_and_hold_returns,
 )
 from src.data import load_closes  # noqa: E402
-from src.individual_overbought import run_individual_overbought  # noqa: E402
+from src.individual_overbought import (  # noqa: E402
+    run_individual_overbought,
+    run_threshold_sweep,
+)
 from src.metrics import (  # noqa: E402
     drawdown_series,
     equity_curve,
@@ -45,8 +48,9 @@ from src.stack_backtest import (  # noqa: E402
     run_stack_portfolio,
 )
 
-FIGURES_DIR = ROOT / "reports" / "figures"
-TABLES_DIR = ROOT / "reports" / "tables"
+REPORTS_DIR = ROOT / "reports"
+FIGURES_DIR = REPORTS_DIR / "figures"
+TABLES_DIR = REPORTS_DIR / "tables"
 
 
 def _save_equity_curve(returns: pd.Series, path: Path) -> None:
@@ -130,6 +134,46 @@ def _save_phase2b_comparison(
     ax.axhline(0, color="grey", lw=0.7)
     ax.grid(True, alpha=0.3)
     ax.legend(loc="upper left", frameon=False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
+def _save_threshold_sweep(
+    sweep_df: pd.DataFrame,
+    phase12_sharpe: float,
+    ceiling_sharpe: float,
+    path: Path,
+) -> None:
+    x = sweep_df["sma20_pct"] * 100.0  # SMA20 threshold in percent
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.plot(
+        x,
+        sweep_df["sharpe"],
+        color="#9b2f8f",
+        lw=1.6,
+        marker="o",
+        label="Phase 2b (individual screen)",
+    )
+    ax.axhline(
+        phase12_sharpe,
+        color="#2a8f3a",
+        lw=1.2,
+        ls="--",
+        label=f"Phase 1+2 (market filter) — {phase12_sharpe:.2f}",
+    )
+    ax.axhline(
+        ceiling_sharpe,
+        color="#c0700f",
+        lw=1.2,
+        ls=":",
+        label=f"Screen-off ceiling (daily-rebal + mask) — {ceiling_sharpe:.2f}",
+    )
+    ax.set_title("Phase 2b — Sharpe vs individual-overbought SMA20 threshold")
+    ax.set_xlabel("SMA20 overbought threshold (%)")
+    ax.set_ylabel("Sharpe ratio")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="lower right", frameon=False)
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
@@ -255,6 +299,41 @@ def main() -> None:
     phase2b_comparison.index.name = "metric"
     phase2b_comparison.to_csv(TABLES_DIR / "phase2b_comparison.csv")
 
+    # Phase 2b threshold robustness sweep (sensitivity analysis — nothing
+    # adopted; the screen stays at the canonical 5% / 7%).
+    sweep_df = run_threshold_sweep(closes, cash_mask)
+    sweep_out = sweep_df.copy()
+    sweep_out.insert(
+        0,
+        "label",
+        sweep_out.apply(
+            lambda r: f"screen {r['sma20_pct']:.0%}/{r['sma50_pct']:.0%}", axis=1
+        ),
+    )
+    # Two clearly-labeled reference rows (thresholds not applicable).
+    reference_rows = pd.DataFrame(
+        [
+            {
+                "label": "Phase 1+2 (reference)",
+                "sma20_pct": float("nan"),
+                "sma50_pct": float("nan"),
+                "total_return": filtered_metrics["total_return"],
+                "sharpe": filtered_metrics["sharpe_ratio"],
+                "max_dd": filtered_metrics["max_drawdown"],
+            },
+            {
+                "label": "Screen-off ceiling (daily-rebal + mask)",
+                "sma20_pct": float("nan"),
+                "sma50_pct": float("nan"),
+                "total_return": attribution_metrics["total_return"],
+                "sharpe": attribution_metrics["sharpe_ratio"],
+                "max_dd": attribution_metrics["max_drawdown"],
+            },
+        ]
+    )
+    sweep_out = pd.concat([sweep_out, reference_rows], ignore_index=True)
+    sweep_out.to_csv(REPORTS_DIR / "phase2b_threshold_sweep.csv", index=False)
+
     # Figures.
     _save_equity_curve(headline, FIGURES_DIR / "equity_curve.png")
     _save_drawdown(headline, FIGURES_DIR / "drawdown.png")
@@ -268,6 +347,12 @@ def main() -> None:
         phase2b_filtered,
         phase2b_cd_filtered,
         FIGURES_DIR / "phase2b_comparison.png",
+    )
+    _save_threshold_sweep(
+        sweep_df,
+        filtered_metrics["sharpe_ratio"],
+        attribution_metrics["sharpe_ratio"],
+        REPORTS_DIR / "phase2b_threshold_sweep.png",
     )
 
     # Console summary (script entry point only; library code stays silent).
@@ -316,6 +401,14 @@ def main() -> None:
         f"  Annualized vol     : {diag_metrics['annualized_volatility']:.2%}",
         f"  Sharpe ratio       : {diag_metrics['sharpe_ratio']:.2f}",
         f"  Max drawdown       : {diag_metrics['max_drawdown']:.2%}",
+        "Phase 2b threshold sweep (screen on, cooldown 0, market mask applied):",
+        "  SMA20%/SMA50%    total     Sharpe    maxDD",
+        *[
+            f"  {s20 * 100:>4.0f}/{s50 * 100:<5.0f}   {tr:>7.2%}   {sh:>5.2f}   {dd:>7.2%}"
+            for s20, s50, tr, sh, dd in sweep_df.itertuples(index=False)
+        ],
+        f"  reference: Phase 1+2 Sharpe {filtered_metrics['sharpe_ratio']:.2f}"
+        f" | screen-off ceiling {attribution_metrics['sharpe_ratio']:.2f}",
     ]
     print("\n".join(lines))
 

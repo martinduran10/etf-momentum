@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.data import load_closes
 from src.individual_overbought import (
     SMA_LONG_MULTIPLIER,
     SMA_LONG_WINDOW,
@@ -18,9 +19,11 @@ from src.individual_overbought import (
     SMA_SHORT_WINDOW,
     compute_eligibility,
     compute_overbought_flags,
+    run_threshold_sweep,
     select_daily_roster,
     sub_returns_from_selection,
 )
+from src.overbought_filter import build_cash_mask, load_overbought_signal
 
 
 def _days(n: int) -> pd.DatetimeIndex:
@@ -298,6 +301,35 @@ def test_screen_off_ignores_overbought_and_cooldown() -> None:
         slow, overbought, analyze, screen=False, cooldown_days=5
     )
     pd.testing.assert_frame_equal(eligible, slow > 0)
+
+
+# --------------------------------------------------------------------------- #
+# Threshold robustness sweep harness
+# --------------------------------------------------------------------------- #
+
+
+def test_threshold_sweep_runs_and_canonical_pair_reproduces_phase2b() -> None:
+    """The sweep harness runs, and the 5%/7% row reproduces the shipped Phase 2b
+    headline (124.30% / 0.86 / -24.04%) as a regression guard."""
+    closes = load_closes()
+    cash_mask = build_cash_mask(load_overbought_signal(), closes.index)
+
+    sweep = run_threshold_sweep(closes, cash_mask, grid=[(0.05, 0.07)])
+
+    assert list(sweep.columns) == [
+        "sma20_pct",
+        "sma50_pct",
+        "total_return",
+        "sharpe",
+        "max_dd",
+    ]
+    assert len(sweep) == 1
+    row = sweep.iloc[0]
+    assert (row["sma20_pct"], row["sma50_pct"]) == (0.05, 0.07)
+    # Canonical Phase 2b numbers (full precision, frozen at the prior commit).
+    assert row["total_return"] == pytest.approx(1.243019253941057)
+    assert row["sharpe"] == pytest.approx(0.8633661482172864)
+    assert row["max_dd"] == pytest.approx(-0.24039697479841388)
 
 
 # --------------------------------------------------------------------------- #

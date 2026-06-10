@@ -59,6 +59,18 @@ depends only on flags strictly before it). The shipped `cooldown_days = 0` keeps
 the base Phase 2b behavior; a `cooldown_days = 5` variant is reported in
 `RESULTS.md` for comparison.
 
+## Threshold parameters and robustness
+
+The 5% and 7% stretch factors are parameters of `compute_overbought_flags`
+(`sma20_pct`, `sma50_pct`), defaulting to the shipped 5% / 7%. They were swept
+over `(5,7), (6,8), (7,9), (8,10), (10,12)` — each pair run through the full
+Phase 2b backtest (screen on, no cooldown, market mask applied last) — purely as
+a sensitivity check. The full grid and figure are in `RESULTS.md`; **no swept
+value is adopted and the default remains 5% / 7%.** Over the headline window
+every swept threshold stays below the plain market filter (Phase 1+2, Sharpe
+0.97); the default 5% / 7% is the lowest-Sharpe point of the grid, and loosening
+the thresholds raises Sharpe modestly (to ~0.93 at 8% / 10%) before flattening.
+
 ## The 6 imputed analyze dates
 
 Six consecutive rows in `data/overbought_individual.csv` are **imputed** rather
