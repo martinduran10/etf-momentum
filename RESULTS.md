@@ -62,8 +62,8 @@ Each sub-strategy:
 - The daily in/out toggle within a window uses the **same-day** slow signal,
   matching the Excel sheet's row-wise construction.
 
-These two choices together reproduce the Excel headline within tolerance;
-other timing combinations drift outside it.
+These two choices together reproduce the Excel headline closely; other timing
+combinations do not.
 
 ### Combination and phase-in
 
@@ -82,16 +82,19 @@ Headline performance is measured from 2015-12-07 to the end of the data.
 
 ## Headline metrics
 
-| Metric | Excel target | Reproduced | Rel. diff |
-|--------|--------------|------------|-----------|
+The project no longer validates against the deck's published numbers; phases are
+reported empirically, and prior phases are pinned by frozen-snapshot tests
+(`tests/test_phase1_frozen.py` for the Phase 1 metrics, `tests/test_validation.py`
+for the Phase 1 and Phase 2 daily-return series). The table below is a
+descriptive historical note documenting the original Excel reproduction.
+
+| Metric | Excel (published) | Reproduced | Difference |
+|--------|-------------------|------------|------------|
 | Total return | 108.58% | 110.99% | +2.2% |
 | Annualized return | 10.82% | 10.63% | −1.8% |
 | Annualized volatility | 16.16% | 16.21% | +0.3% |
 | Sharpe ratio | 0.67 | 0.66 | −2.1% |
 | Max drawdown | −28.49% | −28.54% | +0.2% |
-
-All five metrics fall within the ±3% relative tolerance enforced by
-`tests/test_validation.py`.
 
 ## Per-sub-strategy metrics
 
@@ -185,6 +188,63 @@ volatility (16.21% → 13.40%) and a shallower maximum drawdown (−28.5% →
 −23.9%), lifting the Sharpe ratio from 0.66 to 0.97. The filter's gains come
 from sidestepping clusters of bad days rather than from amplifying good ones
 — consistent with an overbought-avoidance rule.
+
+## Phase 3: Divergence Filter (Growth Portfolio)
+
+Phase 3 is a third **purely additive overlay**, stacked on the main line (Phase 1
+base returns masked by the Phase 2 overbought filter). It consumes an exogenous,
+precomputed **divergence percentile** (`data/divergence_percentile.csv` — the
+spread between the top-5 and bottom-5 ETFs on the momentum signal, a fraction in
+`[0, 1]`) and never recomputes it.
+
+### Rule (market-level IN/OUT state machine)
+
+All decisions for day `t` use information through the close of `t-1` only (T+1,
+no look-ahead). The Phase 1 *unfiltered* cumulative arithmetic curve
+(`base_curve`, in percentage points) runs underneath at all times.
+
+- **Initialization** (first strategy day, 2015-12-07): IN unless the prior
+  signal day's percentile is ≥ 0.85. It is 0.845, so the strategy starts IN.
+- **Exit (IN → OUT)** is **edge-triggered**: it fires only on a fresh upward
+  cross — `pctl[t-1] ≥ 0.85` **and** `pctl[t-2] < 0.85` — putting day `t` in
+  cash. Merely staying ≥ 0.85 does not re-fire it.
+- **Re-entry (OUT → IN)** fires when *either* the percentile has normalized
+  (`pctl[t-1] < 0.85`) *or* `base_curve` has fallen ≥ 8 points from its peak
+  since the exit.
+- **Re-arm**: after any re-entry the exit can fire again only on another fresh
+  upward cross, so an 8%-driven re-entry while the percentile is still elevated
+  does not immediately re-exit.
+
+0.85 exactly counts as overbought-divergent (exit uses `≥`, signal re-entry uses
+strict `<`). Phase 3 sits in cash whenever the Phase 2 mask **or** the divergence
+mask says cash; Phase 1 keeps running underneath throughout.
+
+### Comparison
+
+![Phase 3 divergence filter vs Phase 1 / Phase 2](reports/figures/phase3_divergence_comparison.png)
+
+| Metric | Phase 1 | Phase 2 | Phase 3 |
+|--------|---------|---------|---------|
+| Total return | 110.99% | 136.18% | 154.58% |
+| Annualized return | 10.63% | 13.05% | 14.81% |
+| Annualized volatility | 16.21% | 13.40% | 12.27% |
+| Sharpe ratio | 0.66 | 0.97 | 1.21 |
+| Max drawdown | −28.54% | −23.90% | −23.84% |
+| % of days in cash | — | 36.96% | 45.63% |
+
+Phase 3 is in cash on 45.63% of headline trading days. Decomposing those cash
+days as a share of all trading days: **30.91%** are overbought-only (Phase 2
+alone), **8.67%** are divergence-only (added by Phase 3), and **6.05%** are
+flagged by both. The divergence overlay therefore forces cash on 8.67 percentage
+points of days the market filter left invested. Over this window, layering it on
+Phase 2 raises total return (136.18% → 154.58%) and Sharpe (0.97 → 1.21) while
+lowering volatility (13.40% → 12.27%), with essentially unchanged maximum
+drawdown (−23.90% → −23.84%).
+
+> **Empirical mode, no target.** Phase 3 has no published headline to match; its
+> tests pin the state-machine mechanics (edge-triggered exit, dual re-entry,
+> re-arm, peak tracking, the 0.85 boundary, initialization, and the T+1
+> no-look-ahead lag), not production numbers.
 
 ## Phase 2b: Individual-ETF Overbought Filter
 
@@ -287,12 +347,14 @@ value is adopted; the default remains 5% / 7%.
 
 ```bash
 pip install -r requirements.txt
-pytest tests/ -v                      # all tests incl. the CI validation gate
+pytest tests/ -v                      # all tests incl. frozen-snapshot regression
 python scripts/run_stack_backtest.py  # regenerate figures + tables
 ```
 
 Outputs land in `reports/figures/` (`equity_curve.png`, `drawdown.png`,
-`stack_vs_spy.png`, `stack_filtered_vs_unfiltered.png`, `phase2b_comparison.png`)
-and `reports/tables/` (`metrics_summary.csv`, `sub_strategy_metrics.csv`,
-`spy_comparison.csv`, `phase2_comparison.csv`, `phase2b_comparison.csv`), plus the
-threshold sweep at `reports/phase2b_threshold_sweep.{csv,png}`.
+`stack_vs_spy.png`, `stack_filtered_vs_unfiltered.png`,
+`phase3_divergence_comparison.png`, `phase2b_comparison.png`) and
+`reports/tables/` (`metrics_summary.csv`, `sub_strategy_metrics.csv`,
+`spy_comparison.csv`, `phase2_comparison.csv`, `phase3_comparison.csv`,
+`phase2b_comparison.csv`), plus the threshold sweep at
+`reports/phase2b_threshold_sweep.{csv,png}`.

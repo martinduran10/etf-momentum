@@ -1,4 +1,4 @@
-# Project briefing — ETF Momentum (Phases 1–2b: Stack Portfolio + Overbought Filters)
+# Project briefing — ETF Momentum (Phases 1–3: Stack Portfolio + Overbought & Divergence Filters)
 
 ## Goal
 
@@ -10,8 +10,9 @@ improvements baked into it; match the Excel mechanics literally and keep it
 frozen. The **overbought market filter is Phase 2** (built — see below),
 applied as an overlay that never modifies Phase 1. The **individual-ETF
 overbought filter is Phase 2b** (built — see below), a daily-rebalanced overlay
-that reuses Phase 1/2 functions and modifies neither. The divergence filter
-(Phase III) and risk-on/risk-off variable (Phase IV) remain future work.
+that reuses Phase 1/2 functions and modifies neither. The **divergence filter is
+Phase 3** (built — see below), a market-level cash overlay stacked on Phase 2's
+output. The risk-on/risk-off variable (Phase IV) remains future work.
 Faithful reproduction always takes priority over "improvements."
 
 ## Universe
@@ -65,8 +66,8 @@ starts).
 - **Daily in/out toggle** uses the **same-day** slow signal (`signal_lag=0`) —
   the literal Excel step-4 mechanic.
 
-This combination reproduces the Excel headline within tolerance; other
-combinations do not.
+This combination reproduces the Excel headline closely; other combinations do
+not.
 
 ## Metrics (arithmetic, no compounding)
 
@@ -75,9 +76,14 @@ combinations do not.
 `sharpe = ann_return / ann_vol` (rf=0), `max_drawdown` from the cumulative-sum
 curve. Headline window: 2015-12-07 → end of data.
 
-### Validation targets (CI gate, ±3% relative)
+### Reporting & regression
 
-total 108.58% · ann 10.82% · vol 16.16% · Sharpe 0.67 · max DD −28.49%.
+Phases are reported **empirically** — there is no deck-target CI gate. The Excel
+numbers survive only as a descriptive reproduction note in `RESULTS.md`/
+`README.md`. Prior phases are pinned by **frozen-snapshot tests**:
+`test_phase1_frozen.py` (Phase 1 headline metrics) and `test_validation.py`
+(Phase 1 and Phase 2 daily-return series, byte-for-byte). Any overlay that
+perturbs an earlier phase fails these.
 
 ## Phase 2 — Overbought market filter (additive overlay)
 
@@ -193,14 +199,19 @@ every metric):
 - `src/individual_overbought.py` — Phase 2b overlay (analyze gate, SMA
   overbought flags, daily eligibility/selection/substitution, per-sub +
   combined returns). **Imports from Phase 1/2; modifies neither.**
+- `src/divergence_filter.py` — Phase 3 overlay (load divergence percentile,
+  build the IN/OUT cash mask, stack on the Phase 2 mask). **Imports from Phase
+  1/2; modifies neither.**
 - `data/overbought_signal.csv` — Phase 2 input (`date, market_ok`).
 - `data/overbought_individual.csv` — Phase 2b input (uses `date, analyze`).
+- `data/divergence_percentile.csv` — Phase 3 input (`date, divergence_pctl`).
 - `docs/overbought_methodology.md` — how `market_ok` was derived.
 - `docs/individual_overbought_methodology.md` — the analyze gate + individual
   overbought test (incl. the 6 imputed dates).
-- `tests/` — data, signals, mechanics, overbought-filter and
-  individual-overbought tests, a frozen-snapshot test pinning Phase 1
-  byte-for-byte, and `test_validation.py` (the Phase 1 CI gate).
+- `tests/` — data, signals, mechanics, overbought-filter, individual-overbought,
+  and divergence-filter tests; `test_phase1_frozen.py` (Phase 1 metrics
+  snapshot) and `test_validation.py` (Phase 1 & Phase 2 daily-series snapshots),
+  with fixtures under `tests/fixtures/`.
 - `scripts/run_stack_backtest.py` — end-to-end run → figures + tables (incl. the
   Phase 2 filtered-vs-unfiltered and Phase 2b comparison outputs).
 

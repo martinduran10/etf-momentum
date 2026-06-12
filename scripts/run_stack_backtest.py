@@ -29,6 +29,11 @@ from src.benchmarks import (  # noqa: E402
     spy_buy_and_hold_returns,
 )
 from src.data import load_closes  # noqa: E402
+from src.divergence_filter import (  # noqa: E402
+    apply_phase3,
+    build_divergence_cash_mask,
+    load_divergence_signal,
+)
 from src.individual_overbought import (  # noqa: E402
     run_individual_overbought,
     run_threshold_sweep,
@@ -179,6 +184,28 @@ def _save_threshold_sweep(
     plt.close(fig)
 
 
+def _save_phase3_comparison(
+    phase1: pd.Series, phase2: pd.Series, phase3: pd.Series, path: Path
+) -> None:
+    fig, ax = plt.subplots(figsize=(11, 5))
+    for returns, color, label in (
+        (phase1, "#1f4e79", "Phase 1"),
+        (phase2, "#2a8f3a", "Phase 2 (overbought mask)"),
+        (phase3, "#9b2f8f", "Phase 3 (+ divergence filter)"),
+    ):
+        curve = equity_curve(returns) * 100.0
+        ax.plot(curve.index, curve.values, color=color, lw=1.4, label=label)
+    ax.set_title("Stack Portfolio — Phase 3 divergence filter vs Phase 1 / Phase 2")
+    ax.set_ylabel("Cumulative return (%)")
+    ax.set_xlabel("Date")
+    ax.axhline(0, color="grey", lw=0.7)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", frameon=False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
 def _save_stack_vs_spy(
     stack_returns: pd.Series, spy_returns: pd.Series, path: Path
 ) -> None:
@@ -263,6 +290,33 @@ def main() -> None:
     phase2_comparison.index.name = "metric"
     phase2_comparison.to_csv(TABLES_DIR / "phase2_comparison.csv")
 
+    # Phase 3: divergence filter overlay. Stacks on Phase 2 — cash whenever the
+    # market-overbought mask OR the divergence state machine says cash. The
+    # divergence machine tracks the Phase 1 UNFILTERED base curve (percentage
+    # points), independent of the Phase 2 mask.
+    pctl = load_divergence_signal()
+    base_curve = result["portfolio_returns"].cumsum() * 100.0
+    divergence_mask = build_divergence_cash_mask(pctl, base_curve, closes.index)
+    phase3_headline = apply_phase3(headline, cash_mask, divergence_mask)
+    phase3_metrics = summary(phase3_headline)
+
+    # Cash-day attribution over the headline window.
+    m2 = cash_mask.reindex(headline.index, fill_value=False)
+    md = divergence_mask.reindex(headline.index, fill_value=False)
+    phase3_cash_share = float((m2 | md).mean())
+    cash_both = float((m2 & md).mean())
+    cash_overbought_only = float((m2 & ~md).mean())
+    cash_divergence_only = float((md & ~m2).mean())
+
+    phase3_comparison = pd.DataFrame(
+        {"Phase 1": metrics, "Phase 2": filtered_metrics, "Phase 3": phase3_metrics}
+    )
+    phase3_comparison.loc["pct_days_in_cash"] = [
+        float("nan"), cash_share, phase3_cash_share
+    ]
+    phase3_comparison.index.name = "metric"
+    phase3_comparison.to_csv(TABLES_DIR / "phase3_comparison.csv")
+
     # Phase 2b: individual-ETF overbought filter (daily-rebalanced overlay).
     # Main series: daily rank + individual screen, then the Phase 2 market mask.
     phase2b = run_individual_overbought(closes, screen=True)
@@ -341,6 +395,12 @@ def main() -> None:
     _save_filtered_vs_unfiltered(
         headline, filtered_headline, FIGURES_DIR / "stack_filtered_vs_unfiltered.png"
     )
+    _save_phase3_comparison(
+        headline,
+        filtered_headline,
+        phase3_headline,
+        FIGURES_DIR / "phase3_divergence_comparison.png",
+    )
     _save_phase2b_comparison(
         headline,
         filtered_headline,
@@ -377,6 +437,16 @@ def main() -> None:
         f"  Sharpe ratio       : {filtered_metrics['sharpe_ratio']:.2f}",
         f"  Max drawdown       : {filtered_metrics['max_drawdown']:.2%}",
         f"  Days in cash       : {cash_share:.2%}",
+        "Phase 3 (Phase 2 mask OR divergence filter) over the same window:",
+        f"  Total return       : {phase3_metrics['total_return']:.2%}",
+        f"  Annualized return  : {phase3_metrics['annualized_return']:.2%}",
+        f"  Annualized vol     : {phase3_metrics['annualized_volatility']:.2%}",
+        f"  Sharpe ratio       : {phase3_metrics['sharpe_ratio']:.2f}",
+        f"  Max drawdown       : {phase3_metrics['max_drawdown']:.2%}",
+        f"  Days in cash       : {phase3_cash_share:.2%}"
+        f"  (overbought-only {cash_overbought_only:.2%},"
+        f" divergence-only {cash_divergence_only:.2%},"
+        f" both {cash_both:.2%})",
         "Phase 2b (individual screen + market mask) over the same window:",
         f"  Total return       : {phase2b_metrics['total_return']:.2%}",
         f"  Annualized return  : {phase2b_metrics['annualized_return']:.2%}",

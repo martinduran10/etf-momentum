@@ -20,21 +20,23 @@ merging). Phase 1's engine and outputs are left byte-for-byte unchanged. See
 
 ```bash
 pip install -r requirements.txt
-pytest tests/ -v                      # all tests incl. the validation CI gate
+pytest tests/ -v                      # all tests incl. frozen-snapshot regression
 python scripts/run_stack_backtest.py  # figures + tables under reports/
 ```
 
-## Phase 1 — Headline (reproduced vs. Excel target)
+## Phase 1 — Headline (Excel reproduction, historical note)
 
-| Metric | Target | Reproduced |
-|--------|--------|------------|
+The strategy is no longer validated against the deck's published numbers; phases
+are reported empirically and prior phases are pinned by frozen-snapshot tests.
+This table is kept only to document the original reproduction provenance.
+
+| Metric | Excel (published) | Reproduced |
+|--------|-------------------|------------|
 | Total return | 108.58% | 110.99% |
 | Annualized return | 10.82% | 10.63% |
 | Annualized volatility | 16.16% | 16.21% |
 | Sharpe ratio | 0.67 | 0.66 |
 | Max drawdown | −28.49% | −28.54% |
-
-All metrics within ±3% relative tolerance.
 
 ## Phase 2 — Overbought filter (unfiltered vs. filtered)
 
@@ -82,11 +84,36 @@ market mask carries most of the gain (0.91). See [RESULTS.md](RESULTS.md) and
 [docs/individual_overbought_methodology.md](docs/individual_overbought_methodology.md)
 (six analyze dates, 2025-09-05 … 2025-09-12, are imputed).
 
+## Phase 3 — Divergence filter
+
+**Phase 3** stacks a third additive overlay on the main line (Phase 1 + Phase 2),
+driven by an exogenous divergence percentile (`data/divergence_percentile.csv`,
+the spread between the top-5 and bottom-5 ETFs on the momentum signal). A
+market-level state machine sits the strategy in cash on an edge-triggered upward
+cross through the 0.85 percentile and re-enters when either the percentile
+normalizes (< 0.85) or the Phase 1 base curve has corrected ≥ 8 points from its
+peak since the exit (all decisions T+1, no look-ahead). Phase 3 is cash whenever
+the Phase 2 mask **or** the divergence mask says cash.
+
+| Metric | Phase 1 | Phase 2 | Phase 3 |
+|--------|---------|---------|---------|
+| Total return | 110.99% | 136.18% | 154.58% |
+| Annualized return | 10.63% | 13.05% | 14.81% |
+| Annualized volatility | 16.21% | 13.40% | 12.27% |
+| Sharpe ratio | 0.66 | 0.97 | 1.21 |
+| Max drawdown | −28.54% | −23.90% | −23.84% |
+| % of days in cash | — | 36.96% | 45.63% |
+
+The divergence overlay adds 8.67 percentage points of cash days beyond Phase 2
+(45.63% total; overbought-only 30.91%, divergence-only 8.67%, both 6.05%). Over
+this window it raises total return and Sharpe at lower volatility with about the
+same drawdown. See [RESULTS.md](RESULTS.md) for the full state-machine rule.
+
 ## Layout
 
 ```
 src/        data loading, signals, backtest engine, metrics
-tests/      data / signal / mechanics tests + test_validation.py (CI gate)
+tests/      data / signal / mechanics tests + frozen-snapshot regression
 scripts/    run_stack_backtest.py (end-to-end)
 reports/    figures/ and tables/ (generated)
 data/       raw closes + universe (inputs; do not modify)

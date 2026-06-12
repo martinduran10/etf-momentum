@@ -1,49 +1,58 @@
-"""CI GATE — reproduce the Excel Stack Portfolio headline metrics.
+"""Frozen-snapshot regression for the Phase 1 and Phase 2 daily-return series.
 
-Each metric must land within +/-3% (relative) of its Excel target. The build
-fails if the reproduction drifts outside tolerance.
+The project no longer validates against the investor deck's published numbers —
+phases are reported empirically. This module instead pins the Phase 1 (Stack
+Portfolio) and Phase 2 (overbought-filtered) daily-return series byte-for-byte,
+enforcing the additive-overlay principle: a downstream phase (or any other edit)
+must never perturb an earlier one.
+
+Snapshots live in ``tests/fixtures/*.parquet`` (exact float64 round-trip). A
+fixture is created on first run and compared exactly on every run thereafter;
+commit the fixtures so the guard is active in CI.
 """
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
+
+import pandas as pd
 
 from src.data import load_closes
-from src.metrics import summary
+from src.overbought_filter import (
+    apply_filter,
+    build_cash_mask,
+    load_overbought_signal,
+)
 from src.stack_backtest import run_stack_portfolio
 
-# Excel backtest targets (headline window 2015-12-07 -> end of data).
-TARGETS = {
-    "total_return": 1.0858,
-    "annualized_return": 0.1082,
-    "annualized_volatility": 0.1616,
-    "sharpe_ratio": 0.67,
-    "max_drawdown": -0.2849,
-}
-
-# Relative tolerance per metric.
-REL_TOL = 0.03
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
-@pytest.fixture(scope="module")
-def metrics() -> dict[str, float]:
-    result = run_stack_portfolio(load_closes())
-    return summary(result["headline_returns"])
+def _check_snapshot(series: pd.Series, name: str) -> None:
+    """Compare ``series`` to its pinned parquet snapshot, bootstrapping if absent."""
+    FIXTURES.mkdir(exist_ok=True)
+    path = FIXTURES / f"{name}.parquet"
+    current = series.rename("ret").to_frame()
+    if not path.exists():
+        current.to_parquet(path)
+    expected = pd.read_parquet(path)
+    pd.testing.assert_frame_equal(current, expected, check_exact=True, check_freq=False)
 
 
-@pytest.mark.parametrize("name", sorted(TARGETS))
-def test_metric_within_relative_tolerance(
-    metrics: dict[str, float], name: str
-) -> None:
-    target = TARGETS[name]
-    actual = metrics[name]
-    rel = abs(actual - target) / abs(target)
-    assert rel <= REL_TOL, (
-        f"{name}: {actual:.4f} is {rel:.1%} off target {target:.4f} "
-        f"(tolerance {REL_TOL:.0%})"
-    )
+def _phase1_phase2_series() -> tuple[pd.Series, pd.Series]:
+    closes = load_closes()
+    result = run_stack_portfolio(closes)
+    headline = result["headline_returns"]
+    cash_mask = build_cash_mask(load_overbought_signal(), closes.index)
+    filtered = apply_filter(headline, cash_mask)
+    return headline, filtered
 
 
-def test_sharpe_in_explicit_band(metrics: dict[str, float]) -> None:
-    # Spec calls out the Sharpe band explicitly: 0.65 .. 0.69.
-    assert 0.65 <= metrics["sharpe_ratio"] <= 0.69
+def test_phase1_daily_returns_match_snapshot() -> None:
+    headline, _ = _phase1_phase2_series()
+    _check_snapshot(headline, "phase1_headline_returns")
+
+
+def test_phase2_daily_returns_match_snapshot() -> None:
+    _, filtered = _phase1_phase2_series()
+    _check_snapshot(filtered, "phase2_filtered_returns")
