@@ -1,20 +1,39 @@
 # etf-momentum
 
-Python reproduction of a tactical ETF allocation strategy ("Stack Portfolio")
-with risk-adjusted momentum signals and tactical risk filters.
+A reproducible study of how tactical **risk overlays** affect the drawdown and
+risk-adjusted return of a momentum portfolio of 43 global ETFs (2015–2026).
 
-**Phase 1** reproduces an Excel backtest of the Stack Portfolio over a 43-ETF
-universe (2015-12-07 → 2026-05-22): four parallel sub-strategies, each holding
-up to five risk-adjusted-momentum names rebalanced every 20 trading days, with
-daily in/out toggling and no compounding. See [CLAUDE.md](CLAUDE.md) for the
-briefing and [RESULTS.md](RESULTS.md) for methodology and metrics.
+Momentum's structural weakness is crash risk: by construction it holds whatever
+has already run the most, which is exactly what tends to be most extended near a
+top. This project starts from a faithfully reproduced momentum backtest (Phase 1)
+and asks one question — **how much can simple, rules-based overlays reduce that
+crash risk, and at what cost?** Three overlays are tested: an overbought-market
+filter (Phase 2), an individual-name overbought screen (Phase 2b), and a
+momentum-divergence filter (Phase 3). Each is *purely additive* — it masks the
+layer beneath it without altering a line of it — a discipline enforced by
+frozen-snapshot regression tests.
 
-**Phase 2** layers an overbought-market filter on top of Phase 1 as a purely
-additive overlay: an exogenous binary signal (`data/overbought_signal.csv`)
-flags days the broad market is overbought, and the strategy sits in cash on the
-four trading days following each flag (T+3 … T+6, with overlapping windows
-merging). Phase 1's engine and outputs are left byte-for-byte unchanged. See
-[RESULTS.md](RESULTS.md) for the full rule and edge cases.
+### Headline
+
+Stacking the overlays over Dec 2015 – May 2026:
+
+| | Phase 1 (base) | Phase 2 (+ market filter) | Phase 3 (+ divergence filter) |
+|---|---|---|---|
+| Max drawdown | −28.5% | −23.9% | **−18.3%** |
+| Sharpe ratio | 0.66 | 0.97 | **1.31** |
+| Days in cash | — | 37% | 43% |
+
+The overlays cut maximum drawdown by roughly a third and raise the Sharpe ratio,
+by sidestepping clusters of bad days rather than amplifying good ones — the
+strategy sits in cash ~43% of the time. Not every overlay helps: the
+individual-name screen (Phase 2b) is reported as a **negative result**, and the
+repo documents why it does not improve on the market filter.
+
+> **Read these as an in-sample study, not a validated strategy.** The figures are
+> gross of transaction costs, fit over a single market regime, and not yet
+> walk-forward-validated. The divergence signal is recomputed in-repo with a
+> no-look-ahead test; the Phase 2 signal is still an exogenous input. The full
+> list of caveats is in [Limitations](RESULTS.md#limitations).
 
 ## Quickstart
 

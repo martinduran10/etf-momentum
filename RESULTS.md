@@ -353,6 +353,72 @@ across every screened threshold; the worst peak-to-trough is set by the
 market-mask cash path, not by which names the individual screen drops. No swept
 value is adopted; the default remains 5% / 7%.
 
+## Limitations
+
+The results above are a reproducible, in-sample study — not a validated
+strategy. The caveats below are listed roughly in order of how much they bear on
+the headline numbers, and several are the subject of planned work.
+
+**1. No transaction costs or turnover accounting.** All returns are gross. The
+Phase 2 and Phase 3 gains come almost entirely from moving to cash and back, and
+Phase 2b rebalances daily across 43 names — none of that trading is costed, and
+turnover is not yet measured. A realistic per-trade cost would erode the
+cash-timing overlays' apparent edge, most sharply for the daily-rebalanced
+Phase 2b. Net-of-cost figures are the relevant ones for any live use.
+
+**2. The Phase 2 overbought signal is not yet reproducible.** Unlike the
+divergence percentile (now recomputed in-repo, point-in-time, no look-ahead), the
+Phase 2 market-overbought signal and the Phase 2b analyze gate remain exogenous,
+precomputed inputs. Two of the four overbought rules depend on index-constituent
+breadth data (the share of S&P 500 members above their 10-day average; the share
+of Nasdaq 100 members with RSI above 70) that is not redistributed here, so the
+signal cannot currently be regenerated or audited for construction or look-ahead
+from the repo alone. Because Phase 3 stacks on the Phase 2 cash mask, it inherits
+this dependency. Reconstructing the signal from in-repo data or a documented free
+proxy is outstanding work.
+
+**3. In-sample, single backtest, no out-of-sample validation.** Every parameter —
+the four lookbacks (260/280/300/320), the 0.85 divergence threshold, the 8-point
+re-entry, the T+3…T+6 cash window, the 1.05/1.07 overbought multipliers — was
+chosen on the full sample and never validated out-of-sample. There is no
+walk-forward in which parameters are fixed only on past data. A single backtest
+over hand-chosen settings is structurally prone to overfitting; the figures
+should be read as in-sample fits, not forward-looking expectations.
+
+**4. One market regime.** The headline window (Dec 2015 – May 2026) is essentially
+one secular equity bull market, interrupted only by the 2020 COVID crash and the
+2022 drawdown. Momentum tends to look strong in persistent trends, and risk
+overlays tend to look good when the few large drawdowns are clustered. The
+results say little about a prolonged bear market, a sideways regime, or a sharp
+momentum-crash reversal — none of which this window contains in quantity.
+
+**5. No statistical-significance testing.** Sharpe ratios are point estimates with
+no confidence intervals, t-statistics, or deflated-Sharpe adjustment. Given the
+number of variants examined (three nested overlays, a five-point threshold sweep,
+multiple timing conventions), some apparent improvement is expected from multiple
+testing alone. Without a deflated Sharpe or a bootstrap distribution, the Sharpe
+gains cannot be cleanly distinguished from sampling noise.
+
+**6. Non-standard return convention and a single, non-comparable benchmark.**
+Returns are arithmetic (a running sum of daily returns, capital reset to $100 each
+rebalance), inherited from the source Excel rather than chosen as best practice; a
+compounding portfolio would report different totals. The only benchmark is SPY
+buy-and-hold, itself compounded against the strategy's arithmetic line, so the
+comparison is indicative rather than like-for-like. There is no equal-weight-
+universe benchmark and no factor/beta regression, so the results do not yet
+separate genuine alpha from timed market beta.
+
+**7. Fixed, hindsight-selected universe.** The 43-ETF universe is fixed and known
+across the whole window; the backtest does not reconstruct a point-in-time
+universe of ETFs that existed and were selectable on each historical date. The set
+was chosen with hindsight, so any selection effect from favoring ETFs that
+survived and stayed liquid over 2014–2026 is not controlled for.
+
+**Planned work**, in priority order: transaction-cost and turnover accounting;
+walk-forward validation; deflated-Sharpe and bootstrap significance; a factor /
+equal-weight benchmark decomposition; and reconstruction of the Phase 2 signal
+from in-repo data.
+
 ## Reproducing
 
 ```bash
