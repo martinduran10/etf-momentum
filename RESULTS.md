@@ -192,10 +192,20 @@ from sidestepping clusters of bad days rather than from amplifying good ones
 ## Phase 3: Divergence Filter (Growth Portfolio)
 
 Phase 3 is a third **purely additive overlay**, stacked on the main line (Phase 1
-base returns masked by the Phase 2 overbought filter). It consumes an exogenous,
-precomputed **divergence percentile** (`data/divergence_percentile.csv` — the
-spread between the top-5 and bottom-5 ETFs on the momentum signal, a fraction in
-`[0, 1]`) and never recomputes it.
+base returns masked by the Phase 2 overbought filter). It is driven by a
+**divergence percentile** (`data/divergence_percentile.csv` — the spread between
+the top-5 and bottom-5 ETFs on the momentum signal, a fraction in `[0, 1]`).
+
+> **Methodology note — the percentile is now reproducible from raw closes.**
+> The divergence percentile was previously an exogenous, hand-supplied CSV. It is
+> now recomputed in-repo from the raw closes by `src/divergence_signal.py`
+> (regenerate with `scripts/build_divergence_signal.py`) on a **point-in-time,
+> expanding-percentile** basis with **no look-ahead**: each day's percentile
+> ranks the current divergence only against history through that day.
+> `tests/test_divergence_signal.py::test_no_look_ahead_truncation_invariance`
+> enforces this — truncating the input history leaves every earlier percentile
+> value unchanged. The Phase 3 backtest still consumes the percentile from the
+> CSV, exactly as Phase 2 consumes its overbought signal.
 
 ### Rule (market-level IN/OUT state machine)
 
@@ -225,21 +235,21 @@ mask says cash; Phase 1 keeps running underneath throughout.
 
 | Metric | Phase 1 | Phase 2 | Phase 3 |
 |--------|---------|---------|---------|
-| Total return | 110.99% | 136.18% | 154.58% |
-| Annualized return | 10.63% | 13.05% | 14.81% |
-| Annualized volatility | 16.21% | 13.40% | 12.27% |
-| Sharpe ratio | 0.66 | 0.97 | 1.21 |
-| Max drawdown | −28.54% | −23.90% | −23.84% |
-| % of days in cash | — | 36.96% | 45.63% |
+| Total return | 110.99% | 136.18% | 167.85% |
+| Annualized return | 10.63% | 13.05% | 16.08% |
+| Annualized volatility | 16.21% | 13.40% | 12.25% |
+| Sharpe ratio | 0.66 | 0.97 | 1.31 |
+| Max drawdown | −28.54% | −23.90% | −18.26% |
+| % of days in cash | — | 36.96% | 43.19% |
 
-Phase 3 is in cash on 45.63% of headline trading days. Decomposing those cash
-days as a share of all trading days: **30.91%** are overbought-only (Phase 2
-alone), **8.67%** are divergence-only (added by Phase 3), and **6.05%** are
-flagged by both. The divergence overlay therefore forces cash on 8.67 percentage
+Phase 3 is in cash on 43.19% of headline trading days. Decomposing those cash
+days as a share of all trading days: **32.85%** are overbought-only (Phase 2
+alone), **6.24%** are divergence-only (added by Phase 3), and **4.11%** are
+flagged by both. The divergence overlay therefore forces cash on 6.24 percentage
 points of days the market filter left invested. Over this window, layering it on
-Phase 2 raises total return (136.18% → 154.58%) and Sharpe (0.97 → 1.21) while
-lowering volatility (13.40% → 12.27%), with essentially unchanged maximum
-drawdown (−23.90% → −23.84%).
+Phase 2 raises total return (136.18% → 167.85%) and Sharpe (0.97 → 1.31), lowers
+volatility (13.40% → 12.25%), and **materially reduces the maximum drawdown**
+(−23.90% → −18.26%).
 
 > **Empirical mode, no target.** Phase 3 has no published headline to match; its
 > tests pin the state-machine mechanics (edge-triggered exit, dual re-entry,

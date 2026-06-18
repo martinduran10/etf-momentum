@@ -43,9 +43,9 @@ def test_loader_shape_bounds_and_cleanliness() -> None:
     assert not sig.index.has_duplicates
     assert sig.notna().all()
     assert float(sig.min()) >= 0.0 and float(sig.max()) <= 1.0
-    assert len(sig) == 2764
-    assert sig.index.min() == pd.Timestamp("2015-06-16")
-    assert sig.index.max() == pd.Timestamp("2026-06-11")
+    assert len(sig) == 2681
+    assert sig.index.min() == pd.Timestamp("2015-09-24")
+    assert sig.index.max() == pd.Timestamp("2026-05-22")
 
 
 # --------------------------------------------------------------------------- #

@@ -87,27 +87,30 @@ market mask carries most of the gain (0.91). See [RESULTS.md](RESULTS.md) and
 ## Phase 3 — Divergence filter
 
 **Phase 3** stacks a third additive overlay on the main line (Phase 1 + Phase 2),
-driven by an exogenous divergence percentile (`data/divergence_percentile.csv`,
-the spread between the top-5 and bottom-5 ETFs on the momentum signal). A
-market-level state machine sits the strategy in cash on an edge-triggered upward
-cross through the 0.85 percentile and re-enters when either the percentile
-normalizes (< 0.85) or the Phase 1 base curve has corrected ≥ 8 points from its
-peak since the exit (all decisions T+1, no look-ahead). Phase 3 is cash whenever
-the Phase 2 mask **or** the divergence mask says cash.
+driven by a divergence percentile (`data/divergence_percentile.csv`, the spread
+between the top-5 and bottom-5 ETFs on the momentum signal). A market-level state
+machine sits the strategy in cash on an edge-triggered upward cross through the
+0.85 percentile and re-enters when either the percentile normalizes (< 0.85) or
+the Phase 1 base curve has corrected ≥ 8 points from its peak since the exit (all
+decisions T+1, no look-ahead). Phase 3 is cash whenever the Phase 2 mask **or**
+the divergence mask says cash. The percentile, once an exogenous CSV, is now
+reproduced in-repo from raw closes ([src/divergence_signal.py](src/divergence_signal.py))
+point-in-time with no look-ahead.
 
 | Metric | Phase 1 | Phase 2 | Phase 3 |
 |--------|---------|---------|---------|
-| Total return | 110.99% | 136.18% | 154.58% |
-| Annualized return | 10.63% | 13.05% | 14.81% |
-| Annualized volatility | 16.21% | 13.40% | 12.27% |
-| Sharpe ratio | 0.66 | 0.97 | 1.21 |
-| Max drawdown | −28.54% | −23.90% | −23.84% |
-| % of days in cash | — | 36.96% | 45.63% |
+| Total return | 110.99% | 136.18% | 167.85% |
+| Annualized return | 10.63% | 13.05% | 16.08% |
+| Annualized volatility | 16.21% | 13.40% | 12.25% |
+| Sharpe ratio | 0.66 | 0.97 | 1.31 |
+| Max drawdown | −28.54% | −23.90% | −18.26% |
+| % of days in cash | — | 36.96% | 43.19% |
 
-The divergence overlay adds 8.67 percentage points of cash days beyond Phase 2
-(45.63% total; overbought-only 30.91%, divergence-only 8.67%, both 6.05%). Over
-this window it raises total return and Sharpe at lower volatility with about the
-same drawdown. See [RESULTS.md](RESULTS.md) for the full state-machine rule.
+The divergence overlay adds 6.24 percentage points of cash days beyond Phase 2
+(43.19% total; overbought-only 32.85%, divergence-only 6.24%, both 4.11%). Over
+this window it raises total return and Sharpe at lower volatility **and** a
+materially shallower maximum drawdown (−23.90% → −18.26%). See
+[RESULTS.md](RESULTS.md) for the full state-machine rule.
 
 ## Layout
 
