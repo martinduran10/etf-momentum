@@ -78,7 +78,7 @@ curve. Headline window: 2015-12-07 → end of data.
 
 ### Reporting & regression
 
-Phases are reported **empirically** — there is no deck-target CI gate. The Excel
+Phases are reported **empirically** — there is no target CI gate. The Excel
 numbers survive only as a descriptive reproduction note in `RESULTS.md`/
 `README.md`. Prior phases are pinned by **frozen-snapshot tests**:
 `test_phase1_frozen.py` (Phase 1 headline metrics) and `test_validation.py`
@@ -96,7 +96,7 @@ frozen-snapshot test enforces this).
 overbought). Python consumes it as-is and does **not** recompute it. How the
 values were derived is documented in `docs/overbought_methodology.md`.
 
-**Cash-window rule (custom variant, not the deck's T+1).** For each trading day
+**Cash-window rule (T+3..T+6).** For each trading day
 `T` where `market_ok == 0`, force cash on the four trading days `T+3, T+4, T+5,
 T+6`. Offsets are counted in the strategy's trading-day calendar
 (weekends/holidays skipped). Overlapping windows merge. The 3-day minimum lag
@@ -110,9 +110,8 @@ Phase 1 keeps running underneath during cash windows — rebalances still happen
 the in/out toggle and same-day-close re-entry keep operating; Phase 2 only masks
 the output.
 
-**No validation target.** Phase 2 runs in empirical mode (the custom T+3 variant
-vs the deck's T+1), so there is no CI metric gate for it. Results closely track
-the deck's published Phase II (134.94% / Sharpe 1.01):
+**No validation target.** Phase 2 runs in empirical mode, so there is no CI
+metric gate for it:
 
 | Metric | Unfiltered (Phase 1) | Filtered (Phase 2) |
 |--------|----------------------|--------------------|

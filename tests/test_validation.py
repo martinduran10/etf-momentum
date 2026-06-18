@@ -1,10 +1,9 @@
 """Frozen-snapshot regression for the Phase 1 and Phase 2 daily-return series.
 
-The project no longer validates against the investor deck's published numbers —
-phases are reported empirically. This module instead pins the Phase 1 (Stack
-Portfolio) and Phase 2 (overbought-filtered) daily-return series byte-for-byte,
-enforcing the additive-overlay principle: a downstream phase (or any other edit)
-must never perturb an earlier one.
+Phases are reported empirically. This module pins the Phase 1 (Stack Portfolio)
+and Phase 2 (overbought-filtered) daily-return series byte-for-byte, enforcing
+the additive-overlay principle: a downstream phase (or any other edit) must never
+perturb an earlier one.
 
 Snapshots live in ``tests/fixtures/*.parquet`` (exact float64 round-trip). A
 fixture is created on first run and compared exactly on every run thereafter;

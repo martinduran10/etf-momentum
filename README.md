@@ -45,9 +45,8 @@ python scripts/run_stack_backtest.py  # figures + tables under reports/
 
 ## Phase 1 — Headline (Excel reproduction, historical note)
 
-The strategy is no longer validated against the deck's published numbers; phases
-are reported empirically and prior phases are pinned by frozen-snapshot tests.
-This table is kept only to document the original reproduction provenance.
+Phases are reported empirically and prior phases are pinned by frozen-snapshot
+tests. This table is kept only to document the original reproduction provenance.
 
 | Metric | Excel (published) | Reproduced |
 |--------|-------------------|------------|
@@ -70,8 +69,7 @@ This table is kept only to document the original reproduction provenance.
 
 The filter improves every dimension — higher return and Sharpe at lower
 volatility and drawdown — by sidestepping clusters of bad days rather than
-amplifying good ones. It closely tracks the deck's published Phase II
-(134.94% / Sharpe 1.01).
+amplifying good ones.
 
 ## Phase 2b — Individual-ETF overbought filter
 

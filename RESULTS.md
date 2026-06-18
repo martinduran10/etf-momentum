@@ -82,9 +82,8 @@ Headline performance is measured from 2015-12-07 to the end of the data.
 
 ## Headline metrics
 
-The project no longer validates against the deck's published numbers; phases are
-reported empirically, and prior phases are pinned by frozen-snapshot tests
-(`tests/test_phase1_frozen.py` for the Phase 1 metrics, `tests/test_validation.py`
+Phases are reported empirically, and prior phases are pinned by frozen-snapshot
+tests (`tests/test_phase1_frozen.py` for the Phase 1 metrics, `tests/test_validation.py`
 for the Phase 1 and Phase 2 daily-return series). The table below is a
 descriptive historical note documenting the original Excel reproduction.
 
