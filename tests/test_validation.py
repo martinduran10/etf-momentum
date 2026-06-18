@@ -29,13 +29,22 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _check_snapshot(series: pd.Series, name: str) -> None:
-    """Compare ``series`` to its pinned parquet snapshot, bootstrapping if absent."""
+    """Compare ``series`` to its pinned parquet snapshot, bootstrapping if absent.
+
+    The index is normalized to nanosecond resolution before comparison so the
+    guard is robust to pandas' datetime-resolution differences across versions
+    (e.g. read_csv yielding datetime64[us] on pandas 3.x vs [ns] in the committed
+    fixtures). Only the index storage unit is harmonized; the daily-return values
+    are still compared byte-for-byte (check_exact=True).
+    """
     FIXTURES.mkdir(exist_ok=True)
     path = FIXTURES / f"{name}.parquet"
     current = series.rename("ret").to_frame()
+    current.index = current.index.as_unit("ns")
     if not path.exists():
         current.to_parquet(path)
     expected = pd.read_parquet(path)
+    expected.index = expected.index.as_unit("ns")
     pd.testing.assert_frame_equal(current, expected, check_exact=True, check_freq=False)
 
 
